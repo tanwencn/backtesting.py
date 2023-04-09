@@ -89,17 +89,12 @@ def compute_stats(
     for t in trades_df.itertuples(index=False):
         have_position[t.EntryBar:t.ExitBar + 1] = 1
 
-    #s.loc['Exposure Time [%]'] = have_position.mean() * 100  # In "n bars" time, not index time
-    # s.loc['Equity Final [$]'] = equity[-1]
-    # s.loc['Equity Peak [$]'] = equity.max()
-    #s.loc['Return [%]'] = (equity[-1] - equity[0]) / equity[0] * 100
-    s.loc['市场参与度[%]'] = have_position.mean() * 100  # In "n bars" time, not index time
-    s.loc['最终净值[$]'] = equity[-1]
-    s.loc['最高净值[$]'] = equity.max()
-    s.loc['总收益率[%]'] = (equity[-1] - equity[0]) / equity[0] * 100
+    s.loc['Exposure Time [%]'] = have_position.mean() * 100  # In "n bars" time, not index time
+    s.loc['Equity Final [$]'] = equity[-1]
+    s.loc['Equity Peak [$]'] = equity.max()
+    s.loc['Return [%]'] = (equity[-1] - equity[0]) / equity[0] * 100
     c = ohlc_data.Close.values
-    #s.loc['Buy & Hold Return [%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
-    s.loc['一直持仓收益率[%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
+    s.loc['Buy & Hold Return [%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
 
     gmean_day_return: float = 0
     day_returns = np.array(np.nan)
@@ -116,43 +111,35 @@ def compute_stats(
     # Our annualized return matches `empyrical.annual_return(day_returns)` whereas
     # our risk doesn't; they use the simpler approach below.
     annualized_return = (1 + gmean_day_return)**annual_trading_days - 1
-    # s.loc['Return (Ann.) [%]'] = annualized_return * 100
-    # s.loc['Volatility (Ann.) [%]'] = np.sqrt(
-    #     (day_returns.var(ddof=int(bool(day_returns.shape))) + (1 + gmean_day_return) ** 2) ** annual_trading_days - (
-    #                 1 + gmean_day_return) ** (2 * annual_trading_days)) * 100  # noqa: E501
-    s.loc['年化收益率[%]'] = annualized_return * 100
-    s.loc['年化波动率[%]'] = np.sqrt(
-        (day_returns.var(ddof=int(bool(day_returns.shape))) + (1 + gmean_day_return) ** 2) ** annual_trading_days - (
-                    1 + gmean_day_return) ** (2 * annual_trading_days)) * 100  # noqa: E501
+    s.loc['Return (Ann.) [%]'] = annualized_return * 100
+    s.loc['Volatility (Ann.) [%]'] = np.sqrt((day_returns.var(ddof=int(bool(day_returns.shape))) + (1 + gmean_day_return)**2)**annual_trading_days - (1 + gmean_day_return)**(2*annual_trading_days)) * 100  # noqa: E501
     # s.loc['Return (Ann.) [%]'] = gmean_day_return * annual_trading_days * 100
     # s.loc['Risk (Ann.) [%]'] = day_returns.std(ddof=1) * np.sqrt(annual_trading_days) * 100
 
     # Our Sharpe mismatches `empyrical.sharpe_ratio()` because they use arithmetic mean return
     # and simple standard deviation
-    #s.loc['Sharpe Ratio'] = (s.loc['Return (Ann.) [%]'] - risk_free_rate) / (s.loc['Volatility (Ann.) [%]'] or np.nan)  # noqa: E501
-    s.loc['夏普比率'] = (s.loc['年化收益率[%]'] - risk_free_rate) / (s.loc['年化波动率[%]'] or np.nan)  # noqa: E501
+    s.loc['Sharpe Ratio'] = (s.loc['Return (Ann.) [%]'] - risk_free_rate) / (s.loc['Volatility (Ann.) [%]'] or np.nan)  # noqa: E501
     # Our Sortino mismatches `empyrical.sortino_ratio()` because they use arithmetic mean return
+    s.loc['Sortino Ratio'] = (annualized_return - risk_free_rate) / (np.sqrt(np.mean(day_returns.clip(-np.inf, 0)**2)) * np.sqrt(annual_trading_days))  # noqa: E501
     max_dd = -np.nan_to_num(dd.max())
-
-    s.loc['最大回撤率[%]'] = max_dd * 100
-    s.loc['平均回撤率[%]'] = -dd_peaks.mean() * 100
-    s.loc['最大回撤周期'] = _round_timedelta(dd_dur.max())
-    s.loc['平均回撤周期'] = _round_timedelta(dd_dur.mean())
-    s.loc['交易次数'] = n_trades = len(trades_df)
+    s.loc['Calmar Ratio'] = annualized_return / (-max_dd or np.nan)
+    s.loc['Max. Drawdown [%]'] = max_dd * 100
+    s.loc['Avg. Drawdown [%]'] = -dd_peaks.mean() * 100
+    s.loc['Max. Drawdown Duration'] = _round_timedelta(dd_dur.max())
+    s.loc['Avg. Drawdown Duration'] = _round_timedelta(dd_dur.mean())
+    s.loc['# Trades'] = n_trades = len(trades_df)
     win_rate = np.nan if not n_trades else (pl > 0).mean()
-    s.loc['胜率[%]'] = win_rate * 100
-    s.loc['最佳交易率[%]'] = returns.max() * 100
-    s.loc['最差交易率[%]'] = returns.min() * 100
+    s.loc['Win Rate [%]'] = win_rate * 100
+    s.loc['Best Trade [%]'] = returns.max() * 100
+    s.loc['Worst Trade [%]'] = returns.min() * 100
     mean_return = geometric_mean(returns)
-    s.loc['每笔交易平均收益率[%]'] = mean_return * 100
-    s.loc['最大持仓周期'] = _round_timedelta(durations.max())
-    s.loc['平均持仓周期'] = _round_timedelta(durations.mean())
-    s.loc['盈利因子'] = returns[returns > 0].sum() / (abs(returns[returns < 0].sum()) or np.nan)  # noqa: E501
-    s.loc['期望收益率[%]'] = returns.mean() * 100
+    s.loc['Avg. Trade [%]'] = mean_return * 100
+    s.loc['Max. Trade Duration'] = _round_timedelta(durations.max())
+    s.loc['Avg. Trade Duration'] = _round_timedelta(durations.mean())
+    s.loc['Profit Factor'] = returns[returns > 0].sum() / (abs(returns[returns < 0].sum()) or np.nan)  # noqa: E501
+    s.loc['Expectancy [%]'] = returns.mean() * 100
     s.loc['SQN'] = np.sqrt(n_trades) * pl.mean() / (pl.std() or np.nan)
     s.loc['Kelly Criterion'] = win_rate - (1 - win_rate) / (pl[pl > 0].mean() / -pl[pl < 0].mean())
-    s.loc['Sortino Ratio'] = (annualized_return - risk_free_rate) / (np.sqrt(np.mean(day_returns.clip(-np.inf, 0) ** 2)) * np.sqrt(annual_trading_days))  # noqa: E501
-    s.loc['Calmar Ratio'] = annualized_return / (-max_dd or np.nan)
 
     s.loc['_strategy'] = strategy_instance
     s.loc['_equity_curve'] = equity_df
