@@ -226,7 +226,6 @@ def plot(*, results: pd.Series,
                                            index[-1] + pad))) if index.size > 1 else {}
     fig_ohlc = new_bokeh_figure(**_kwargs)
     figs_above_ohlc, figs_below_ohlc = [], []
-
     source = ColumnDataSource(df)
     source.add((df.Close >= df.Open).values.astype(np.uint8).astype(str), 'inc')
 
@@ -262,11 +261,15 @@ return this.labels[index] || "";
     ohlc_tooltips = [
         ('x, y', NBSP.join(('$index',
                             '$y{0,0.0[0000]}'))),
-        ('OHLC', NBSP.join(('@Open{0,0.0[0000]}',
-                            '@High{0,0.0[0000]}',
-                            '@Low{0,0.0[0000]}',
-                            '@Close{0,0.0[0000]}'))),
-        ('Volume', '@Volume{0,0}')]
+        # ('OHLC', NBSP.join(('@Open{0,0.0[0000]}',
+        #                     '@High{0,0.0[0000]}',
+        #                     '@Low{0,0.0[0000]}',
+        #                     '@Close{0,0.0[0000]}'))),
+        ('开盘价', '@Open{0,0.0[0000]}'),
+        ('最高价', '@High{0,0.0[0000]}'),
+        ('最低价', '@Low{0,0.0[0000]}'),
+        ('收盘价', '@Close{0,0.0[0000]}'),
+        ('成交量', '@Volume{0,0.0[0000]}')]
 
     def new_indicator_figure(**kwargs):
         kwargs.setdefault('height', 90)
@@ -284,10 +287,11 @@ return this.labels[index] || "";
 
         if is_datetime_index:
             formatters = {'@datetime': 'datetime'}
-            tooltips = [("Date", "@datetime{%c}")] + tooltips
+            tooltips = [("时间", "@datetime{%F}")] + tooltips
         else:
             formatters = {}
             tooltips = [("#", "@index")] + tooltips
+
         fig.add_tools(HoverTool(
             point_policy='follow_mouse',
             renderers=renderers, formatters=formatters,
@@ -297,6 +301,7 @@ return this.labels[index] || "";
         """Equity section"""
         # Max DD Dur. line
         equity = equity_data['Equity'].copy()
+        equity_real = equity_data['Equity Real'].copy()
         dd_end = equity_data['DrawdownDuration'].idxmax()
         if np.isnan(dd_end):
             dd_start = dd_end = equity.index[0]
@@ -326,12 +331,21 @@ return this.labels[index] || "";
 
         if relative_equity:
             equity /= equity.iloc[0]
+            equity_real /= equity_real.iloc[0]
         if is_return:
             equity -= equity.iloc[0]
+            equity_real -= equity_real.iloc[0]
 
-        yaxis_label = 'Return' if is_return else 'Equity'
-        source_key = 'eq_return' if is_return else 'equity'
+        # yaxis_label = 'Return' if is_return else 'Equity'
+        # source_key = 'eq_return' if is_return else 'equity'
+        # source_key_real = 'eqr_return' if is_return else 'equity_real'
+        yaxis_label = '资金'
+        source_key = 'balance'
+        source_key_real = 'equity'
+        source_key_float = 'float_profit'
         source.add(equity, source_key)
+        source.add(equity_real, source_key_real)
+        source.add(equity_real-equity, source_key_float)
         fig = new_indicator_figure(
             y_axis_label=yaxis_label,
             **({} if plot_drawdown else dict(height=110)))
@@ -346,25 +360,31 @@ return this.labels[index] || "";
 
         # Equity line
         r = fig.line('index', source_key, source=source, line_width=1.5, line_alpha=1)
+        r2 = fig.line('index', source_key_real, source=source, line_width=1.5, line_alpha=1, line_dash=[5, 5])
+
         if relative_equity:
             tooltip_format = f'@{source_key}{{+0,0.[000]%}}'
+            tooltip_format_real = f'@{source_key_real}{{+0,0.[000]%}}'
+            tooltip_format_float = f'@{source_key_float}{{+0,0.[000]%}}'
             tick_format = '0,0.[00]%'
             legend_format = '{:,.0f}%'
         else:
             tooltip_format = f'@{source_key}{{$ 0,0}}'
+            tooltip_format_real = f'@{source_key_real}{{$ 0,0}}'
+            tooltip_format_float = f'@{source_key_float}{{$ 0,0}}'
             tick_format = '$ 0.0 a'
             legend_format = '${:,.0f}'
-        set_tooltips(fig, [(yaxis_label, tooltip_format)], renderers=[r])
+        set_tooltips(fig, [('结余', tooltip_format), ('权益', tooltip_format_real), ('浮动盈亏', tooltip_format_float)], renderers=[r])
         fig.yaxis.formatter = NumeralTickFormatter(format=tick_format)
 
         # Peaks
         argmax = equity.idxmax()
         fig.scatter(argmax, equity[argmax],
-                    legend_label='Peak ({})'.format(
+                    legend_label='最大结余 ({})'.format(
                         legend_format.format(equity[argmax] * (100 if relative_equity else 1))),
                     color='cyan', size=8)
         fig.scatter(index[-1], equity.values[-1],
-                    legend_label='Final ({})'.format(
+                    legend_label='最终结余 ({})'.format(
                         legend_format.format(equity.iloc[-1] * (100 if relative_equity else 1))),
                     color='blue', size=8)
 
@@ -372,12 +392,12 @@ return this.labels[index] || "";
             drawdown = equity_data['DrawdownPct']
             argmax = drawdown.idxmax()
             fig.scatter(argmax, equity[argmax],
-                        legend_label='Max Drawdown (-{:.1f}%)'.format(100 * drawdown[argmax]),
+                        legend_label='最大回撤 (-{:.1f}%)'.format(100 * drawdown[argmax]),
                         color='red', size=8)
         dd_timedelta_label = df['datetime'].iloc[int(round(dd_end))] - df['datetime'].iloc[dd_start]
         fig.line([dd_start, dd_end], equity.iloc[dd_start],
                  line_color='red', line_width=2,
-                 legend_label=f'Max Dd Dur. ({dd_timedelta_label})'
+                 legend_label=f'最大恢复时间. ({dd_timedelta_label})'
                  .replace(' 00:00:00', '')
                  .replace('(0 days ', '('))
 
@@ -590,10 +610,7 @@ return this.labels[index] || "";
     # Construct figure ...
 
     if plot_equity:
-        _plot_equity_section()
-
-    if plot_return:
-        _plot_equity_section(is_return=True)
+        _plot_equity_section(is_return=plot_return)
 
     if plot_drawdown:
         figs_above_ohlc.append(_plot_drawdown_section())

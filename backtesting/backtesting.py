@@ -714,6 +714,7 @@ class _Broker:
         self._exclusive_orders = exclusive_orders
 
         self._equity = np.tile(np.nan, len(index))
+        self._equity_real = np.tile(np.nan, len(index))
         self.orders: List[Order] = []
         self.trades: List[Trade] = []
         self.position = Position(self)
@@ -801,7 +802,8 @@ class _Broker:
 
         # Log account equity for the equity curve
         equity = self.equity
-        self._equity[i] = equity
+        self._equity_real[i] = equity
+        self._equity[i] = self._cash
 
         # If equity is negative, set all to 0 and stop the simulation
         if equity <= 0:
@@ -1232,9 +1234,11 @@ class Backtest:
             data._set_length(len(self._data))
 
             equity = pd.Series(broker._equity).bfill().fillna(broker._cash).values
+            equity_real = pd.Series(broker._equity_real).bfill().fillna(broker._cash).values
             self._results = compute_stats(
                 trades=broker.closed_trades,
                 equity=equity,
+                equity_real=equity_real,
                 ohlc_data=self._data,
                 risk_free_rate=0.0,
                 strategy_instance=strategy,
@@ -1553,7 +1557,7 @@ class Backtest:
     _mp_backtests: Dict[float, Tuple['Backtest', List, Callable]] = {}
 
     def plot(self, *, results: pd.Series = None, filename=None, plot_width=None,
-             plot_equity=True, plot_return=False, plot_pl=True,
+             plot_equity=True, plot_return=True, plot_pl=True,
              plot_volume=True, plot_drawdown=False, plot_trades=True,
              smooth_equity=False, relative_equity=True,
              superimpose: Union[bool, str] = True,

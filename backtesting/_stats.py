@@ -35,6 +35,7 @@ def geometric_mean(returns: pd.Series) -> float:
 def compute_stats(
         trades: Union[List['Trade'], pd.DataFrame],
         equity: np.ndarray,
+        equity_real: np.ndarray,
         ohlc_data: pd.DataFrame,
         strategy_instance: 'Strategy',
         risk_free_rate: float = 0,
@@ -47,6 +48,7 @@ def compute_stats(
 
     equity_df = pd.DataFrame({
         'Equity': equity,
+        'Equity Real': equity_real,
         'DrawdownPct': dd,
         'DrawdownDuration': dd_dur},
         index=index)

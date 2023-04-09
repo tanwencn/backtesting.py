@@ -61,6 +61,7 @@ e.g.
 """
 
 _EQUITY_AGG = {
+    'Balance': 'last',
     'Equity': 'last',
     'DrawdownPct': 'max',
     'DrawdownDuration': 'max',
