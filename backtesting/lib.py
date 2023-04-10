@@ -67,6 +67,23 @@ _EQUITY_AGG = {
     'DrawdownDuration': 'max',
 }
 
+def shift(arr, num: int, fill_value=np.nan):
+    if num == 0:
+        res = arr
+    elif num > 0:
+        res = np.concatenate((np.full(num, fill_value, dtype=arr.dtype), arr[:-num]))
+    else:
+        res = np.concatenate((arr[-num:], np.full(-num, fill_value, dtype=arr.dtype)))
+
+    return type(arr)(res, **vars(arr))
+
+def pine_barssince(condition: Sequence[bool]) -> int:
+    count = 0
+    for i in range(-1, -len(condition) - 1, -1):
+        if not condition[i]:
+            break
+        count += 1
+    return count
 
 def barssince(condition: Sequence[bool], default=np.inf) -> int:
     """
