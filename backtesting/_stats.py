@@ -101,7 +101,7 @@ def compute_stats(
     s.loc['总收益率[%]'] = (equity[-1] - equity[0]) / equity[0] * 100
     c = ohlc_data.Close.values
     #s.loc['Buy & Hold Return [%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
-    s.loc['一直持仓收益率[%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
+    s.loc['买入并持有[%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
 
     gmean_day_return: float = 0
     day_returns = np.array(np.nan)

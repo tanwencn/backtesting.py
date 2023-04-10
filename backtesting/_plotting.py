@@ -213,7 +213,7 @@ def plot(*, results: pd.Series,
         _figure,
         x_axis_type='linear',
         width=plot_width,
-        height=400,
+        height=500,
         tools="xpan,xwheel_zoom,box_zoom,undo,redo,reset,save",
         active_drag='xpan',
         active_scroll='xwheel_zoom')
@@ -272,7 +272,7 @@ return this.labels[index] || "";
         ('成交量', '@Volume{0,0.0[0000]}')]
 
     def new_indicator_figure(**kwargs):
-        kwargs.setdefault('height', 90)
+        kwargs.setdefault('height', 120)
         fig = new_bokeh_figure(x_range=fig_ohlc.x_range,
                                active_scroll='xwheel_zoom',
                                active_drag='xpan',
@@ -359,8 +359,8 @@ return this.labels[index] || "";
                   fill_color='#ffffea', line_color='#ffcb66')
 
         # Equity line
-        r = fig.line('index', source_key, source=source, line_width=1.5, line_alpha=1)
-        r2 = fig.line('index', source_key_real, source=source, line_width=1.5, line_alpha=1, line_dash=[5, 5])
+        r = fig.line('index', source_key, source=source)
+        r2 = fig.line('index', source_key_real, source=source, line_dash="dotted")
 
         if relative_equity:
             tooltip_format = f'@{source_key}{{+0,0.[000]%}}'
@@ -396,7 +396,7 @@ return this.labels[index] || "";
                         color='red', size=8)
         dd_timedelta_label = df['datetime'].iloc[int(round(dd_end))] - df['datetime'].iloc[dd_start]
         fig.line([dd_start, dd_end], equity.iloc[dd_start],
-                 line_color='red', line_width=2,
+                 line_color='red', line_width=1,
                  legend_label=f'最大恢复时间. ({dd_timedelta_label})'
                  .replace(' 00:00:00', '')
                  .replace('(0 days ', '('))
@@ -419,23 +419,23 @@ return this.labels[index] || "";
 
     def _plot_pl_section():
         """Profit/Loss markers section"""
-        fig = new_indicator_figure(y_axis_label="Profit / Loss")
+        fig = new_indicator_figure(y_axis_label="盈利 / 亏损")
         fig.add_layout(Span(location=0, dimension='width', line_color='#666666',
                             line_dash='dashed', line_width=1))
         returns_long = np.where(trades['Size'] > 0, trades['ReturnPct'], np.nan)
         returns_short = np.where(trades['Size'] < 0, trades['ReturnPct'], np.nan)
         size = trades['Size'].abs()
-        size = np.interp(size, (size.min(), size.max()), (8, 20))
+        size = np.interp(size, (size.min(), size.max()), (5, 20))
         trade_source.add(returns_long, 'returns_long')
         trade_source.add(returns_short, 'returns_short')
         trade_source.add(size, 'marker_size')
         if 'count' in trades:
             trade_source.add(trades['count'], 'count')
         r1 = fig.scatter('index', 'returns_long', source=trade_source, fill_color=cmap,
-                         marker='triangle', line_color='black', size='marker_size')
+                         marker='circle', line_color='black', size='marker_size')
         r2 = fig.scatter('index', 'returns_short', source=trade_source, fill_color=cmap,
-                         marker='inverted_triangle', line_color='black', size='marker_size')
-        tooltips = [("Size", "@size{0,0}")]
+                         marker='circle', line_color='black', size='marker_size')
+        tooltips = [("数量", "@size{0,0}")]
         if 'count' in trades:
             tooltips.append(("Count", "@count{0,0}"))
         set_tooltips(fig, tooltips + [("P/L", "@returns_long{+0.[000]%}")],
