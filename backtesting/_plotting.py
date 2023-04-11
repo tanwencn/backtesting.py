@@ -214,7 +214,7 @@ def plot(*, results: pd.Series,
         x_axis_type='linear',
         width=plot_width,
         height=500,
-        tools="xpan,xwheel_zoom,box_zoom,undo,redo,reset,save",
+        tools="xpan,xwheel_zoom,reset,save",
         active_drag='xpan',
         active_scroll='xwheel_zoom')
 
