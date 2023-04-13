@@ -3,19 +3,17 @@ import re
 import sys
 import warnings
 from colorsys import hls_to_rgb, rgb_to_hls
-from itertools import cycle, combinations
 from functools import partial
+from itertools import cycle, combinations
 from typing import Callable, List, Union
 
 import numpy as np
 import pandas as pd
-
 from bokeh.colors import RGB
 from bokeh.colors.named import (
     lime as BULL_COLOR,
     tomato as BEAR_COLOR
 )
-from bokeh.plotting import figure as _figure
 from bokeh.models import (  # type: ignore
     CrosshairTool,
     CustomJS,
@@ -28,6 +26,8 @@ from bokeh.models import (  # type: ignore
     WheelZoomTool,
     LinearColorMapper,
 )
+from bokeh.plotting import figure as _figure
+
 try:
     from bokeh.models import CustomJSTickFormatter
 except ImportError:  # Bokeh < 3.0
@@ -109,11 +109,11 @@ def _maybe_resample_data(resample_rule, df, indicators, equity_data, trades):
             "15T": 15,
             "30T": 30,
             "1H": 60,
-            "2H": 60*2,
-            "4H": 60*4,
-            "8H": 60*8,
-            "1D": 60*24,
-            "1W": 60*24*7,
+            "2H": 60 * 2,
+            "4H": 60 * 4,
+            "8H": 60 * 8,
+            "1D": 60 * 24,
+            "1W": 60 * 24 * 7,
             "1M": np.inf,
         })
         timespan = df.index[-1] - df.index[0]
@@ -147,6 +147,7 @@ def _maybe_resample_data(resample_rule, df, indicators, equity_data, trades):
                 mean_time = int(bars.loc[s.index].view(int).mean())
                 new_bar_idx = new_index.get_indexer([mean_time], method='nearest')[0]
                 return new_bar_idx
+
         return f
 
     if len(trades):  # Avoid pandas "resampling on Int64 index" error
@@ -167,6 +168,7 @@ def plot(*, results: pd.Series,
          filename='', plot_width=None,
          plot_equity=True, plot_return=False, plot_pl=True,
          plot_volume=True, plot_drawdown=False, plot_trades=True,
+         plot_bars_type='123',
          smooth_equity=False, relative_equity=True,
          superimpose=True, resample=True,
          reverse_indicators=True,
@@ -345,7 +347,7 @@ return this.labels[index] || "";
         source_key_float = 'float_profit'
         source.add(equity, source_key)
         source.add(equity_real, source_key_real)
-        source.add(equity_real-equity, source_key_float)
+        source.add(equity_real - equity, source_key_float)
         fig = new_indicator_figure(
             y_axis_label=yaxis_label,
             **({} if plot_drawdown else dict(height=110)))
@@ -374,7 +376,8 @@ return this.labels[index] || "";
             tooltip_format_float = f'@{source_key_float}{{$ 0,0}}'
             tick_format = '$ 0.0 a'
             legend_format = '${:,.0f}'
-        set_tooltips(fig, [('结余', tooltip_format), ('权益', tooltip_format_real), ('浮动盈亏', tooltip_format_float)], renderers=[r])
+        set_tooltips(fig, [('结余', tooltip_format), ('权益', tooltip_format_real), ('浮动盈亏', tooltip_format_float)],
+                     renderers=[r])
         fig.yaxis.formatter = NumeralTickFormatter(format=tick_format)
 
         # Peaks
@@ -493,18 +496,27 @@ return this.labels[index] || "";
         df2['inc'] = (df2.Close >= df2.Open).astype(int).astype(str)
         df2.index.name = None
         source2 = ColumnDataSource(df2)
-        fig_ohlc.segment('index', 'High', 'index', 'Low', source=source2, color='#bbbbbb')
-        colors_lighter = [lightness(BEAR_COLOR, .92),
-                          lightness(BULL_COLOR, .92)]
-        fig_ohlc.vbar('index', '_width', 'Open', 'Close', source=source2, line_color=None,
-                      fill_color=factor_cmap('inc', colors_lighter, ['0', '1']))
+        if plot_bars_type == 'close':
+            r = fig_ohlc.line('index', 'Close', source=source2, line_width=1.5, line_color='black')
+        else:
+            fig_ohlc.segment('index', 'High', 'index', 'Low', source=source2, color='#bbbbbb')
+            colors_lighter = [lightness(BEAR_COLOR, .92),
+                              lightness(BULL_COLOR, .92)]
+            fig_ohlc.vbar('index', '_width', 'Open', 'Close', source=source2, line_color=None,
+                          fill_color=factor_cmap('inc', colors_lighter, ['0', '1']))
 
     def _plot_ohlc():
-        """Main OHLC bars"""
-        fig_ohlc.segment('index', 'High', 'index', 'Low', source=source, color="black")
-        r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=source,
-                          line_color="black", fill_color=inc_cmap)
+        if plot_bars_type == 'close':
+            r = fig_ohlc.line('index', 'Close', source=source, line_width=1.5, line_color='black')
+        else:
+            """Main OHLC bars"""
+            fig_ohlc.segment('index', 'High', 'index', 'Low', source=source, color="black")
+            r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=source,
+                              line_color="black", fill_color=inc_cmap)
         return r
+
+    def _plot_ohlc_kline(source):
+        pass
 
     def _plot_ohlc_trades():
         """Trade entry / exit markers on OHLC plot"""
