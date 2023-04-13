@@ -24,6 +24,7 @@ from ._plotting import plot_heatmaps as _plot_heatmaps
 from ._stats import compute_stats as _compute_stats
 from ._util import _Array, _as_str
 from .backtesting import Strategy
+from functools import lru_cache
 
 __pdoc__ = {}
 
@@ -67,6 +68,7 @@ _EQUITY_AGG = {
     'DrawdownDuration': 'max',
 }
 
+@lru_cache()
 def shift(arr, num: int, fill_value=np.nan):
     if num == 0:
         res = arr
