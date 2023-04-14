@@ -24,6 +24,7 @@ from numpy.random import default_rng
 
 try:
     from tqdm.auto import tqdm as _tqdm
+
     _tqdm = partial(_tqdm, leave=False)
 except ImportError:
     def _tqdm(seq, **_):
@@ -49,6 +50,7 @@ class Strategy(metaclass=ABCMeta):
     `backtesting.backtesting.Strategy.next` to define
     your own strategy.
     """
+
     def __init__(self, broker, data, params):
         self._indicators = []
         self._broker: _Broker = broker
@@ -143,7 +145,7 @@ class Strategy(metaclass=ABCMeta):
             raise ValueError(
                 'Indicators must return (optionally a tuple of) numpy.arrays of same '
                 f'length as `data` (data shape: {self._data.Close.shape}; indicator "{name}" '
-                f'shape: {getattr(value, "shape" , "")}, returned value: {value})')
+                f'shape: {getattr(value, "shape", "")}, returned value: {value})')
 
         if plot and overlay is None and np.issubdtype(value.dtype, np.number):
             x = value / self._data.Close
@@ -192,6 +194,7 @@ class Strategy(metaclass=ABCMeta):
 
     class __FULL_EQUITY(float):  # noqa: N801
         def __repr__(self): return '.9999'
+
     _FULL_EQUITY = __FULL_EQUITY(1 - sys.float_info.epsilon)
 
     def buy(self, *,
@@ -291,6 +294,7 @@ class _Orders(tuple):
     """
     TODO: remove this class. Only for deprecation.
     """
+
     def cancel(self):
         """Cancel all non-contingent (i.e. SL/TP) orders."""
         for order in self:
@@ -318,6 +322,7 @@ class Position:
         if self.position:
             ...  # we have a position, either long or short
     """
+
     def __init__(self, broker: '_Broker'):
         self.__broker = broker
 
@@ -382,6 +387,7 @@ class Order:
     [filled]: https://www.investopedia.com/terms/f/fill.asp
     [Good 'Til Canceled]: https://www.investopedia.com/terms/g/gtc.asp
     """
+
     def __init__(self, broker: '_Broker',
                  size: float,
                  limit_price: Optional[float] = None,
@@ -528,6 +534,7 @@ class Trade:
     When an `Order` is filled, it results in an active `Trade`.
     Find active trades in `Strategy.trades` and closed, settled trades in `Strategy.closed_trades`.
     """
+
     def __init__(self, broker: '_Broker', size: int, entry_price: float, entry_bar, tag):
         self.__broker = broker
         self.__size = size
@@ -542,7 +549,7 @@ class Trade:
     def __repr__(self):
         return f'<Trade size={self.__size} time={self.__entry_bar}-{self.__exit_bar or ""} ' \
                f'price={self.__entry_price}-{self.__exit_price or ""} pl={self.pl:.0f}' \
-               f'{" tag="+str(self.__tag) if self.__tag is not None else ""}>'
+               f'{" tag=" + str(self.__tag) if self.__tag is not None else ""}>'
 
     def _replace(self, **kwargs):
         for k, v in kwargs.items():
@@ -1023,6 +1030,7 @@ class Backtest:
     instance, or `backtesting.backtesting.Backtest.optimize` to
     optimize it.
     """
+
     def __init__(self,
                  data: pd.DataFrame,
                  strategy: Type[Strategy],
@@ -1092,10 +1100,10 @@ class Backtest:
 
         # Convert index to datetime index
         if (not isinstance(data.index, pd.DatetimeIndex) and
-            not isinstance(data.index, pd.RangeIndex) and
-            # Numeric index with most large numbers
-            (data.index.is_numeric() and
-             (data.index > pd.Timestamp('1975').timestamp()).mean() > .8)):
+                not isinstance(data.index, pd.RangeIndex) and
+                # Numeric index with most large numbers
+                (data.index.is_numeric() and
+                 (data.index > pd.Timestamp('1975').timestamp()).mean() > .8)):
             try:
                 data.index = pd.to_datetime(data.index, infer_datetime_format=True)
             except ValueError:
@@ -1255,8 +1263,8 @@ class Backtest:
                  return_optimization: bool = False,
                  random_state: Optional[int] = None,
                  **kwargs) -> Union[pd.Series,
-                                    Tuple[pd.Series, pd.Series],
-                                    Tuple[pd.Series, pd.Series, dict]]:
+    Tuple[pd.Series, pd.Series],
+    Tuple[pd.Series, pd.Series, dict]]:
         """
         Optimize strategy parameters to an optimal combination.
         Returns result `pd.Series` of the best run.
@@ -1450,8 +1458,8 @@ class Backtest:
             return stats
 
         def _optimize_skopt() -> Union[pd.Series,
-                                       Tuple[pd.Series, pd.Series],
-                                       Tuple[pd.Series, pd.Series, dict]]:
+        Tuple[pd.Series, pd.Series],
+        Tuple[pd.Series, pd.Series, dict]]:
             try:
                 from skopt import forest_minimize
                 from skopt.callbacks import DeltaXStopper
@@ -1558,9 +1566,9 @@ class Backtest:
 
     def plot(self, *, results: pd.Series = None, filename=None, plot_width=None,
              plot_equity=True, plot_return=True, plot_pl=True,
-             plot_volume=True, plot_drawdown=False, plot_trades=True,
+             plot_volume=True, plot_drawdown=False, plot_trades=True, plot_bars_type='kline',
              smooth_equity=False, relative_equity=True,
-             superimpose: Union[bool, str] = True,
+             superimpose: Union[bool, str] = False,
              resample=True, reverse_indicators=False,
              show_legend=True, open_browser=True):
         """
@@ -1659,6 +1667,7 @@ class Backtest:
             plot_volume=plot_volume,
             plot_drawdown=plot_drawdown,
             plot_trades=plot_trades,
+            plot_bars_type=plot_bars_type,
             smooth_equity=smooth_equity,
             relative_equity=relative_equity,
             superimpose=superimpose,
