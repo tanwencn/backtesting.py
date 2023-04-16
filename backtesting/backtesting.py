@@ -79,7 +79,7 @@ class Strategy(metaclass=ABCMeta):
 
     def I(self,  # noqa: E743
           func: Callable, *args,
-          name=None, plot=True, overlay=None, color=None, scatter=False,
+          name=None, plot=True, overlay=None, color=None, scatter=False, shifting=0,
           **kwargs) -> np.ndarray:
         """
         Declare an indicator. An indicator is just an array of values,
@@ -154,10 +154,15 @@ class Strategy(metaclass=ABCMeta):
             with np.errstate(invalid='ignore'):
                 overlay = ((x < 1.4) & (x > .6)).mean() > .6
 
+        if shifting > 0:
+            value = np.roll(value, shifting)
+            value[..., :shifting] = np.nan
+
         value = _Indicator(value, name=name, plot=plot, overlay=overlay,
                            color=color, scatter=scatter,
                            # _Indicator.s Series accessor uses this:
                            index=self.data.index)
+
         self._indicators.append(value)
         return value
 
@@ -1144,7 +1149,7 @@ class Backtest:
         self._strategy = strategy
         self._results: Optional[pd.Series] = None
 
-    def run(self, **kwargs) -> pd.Series:
+    def run(self, signal_marker: bool = False, **kwargs) -> pd.Series:
         """
         Run the backtest. Returns `pd.Series` with results and statistics.
 
@@ -1191,6 +1196,9 @@ class Backtest:
             period of the `Strategy.I` indicator which lags the most.
             Obviously, this can affect results.
         """
+        if not len(self._data):
+            return pd.Series()
+
         data = _Data(self._data.copy(deep=False))
         broker: _Broker = self._broker(data=data)
         strategy: Strategy = self._strategy(broker, data, kwargs)
@@ -1228,14 +1236,15 @@ class Backtest:
                 # Next tick, a moment before bar close
                 strategy.next()
             else:
-                # Close any remaining open trades so they produce some stats
-                for trade in broker.trades:
-                    trade.close()
+                if not signal_marker:
+                    # Close any remaining open trades so they produce some stats
+                    for trade in broker.trades:
+                        trade.close()
 
-                # Re-run broker one last time to handle orders placed in the last strategy
-                # iteration. Use the same OHLC values as in the last broker iteration.
-                if start < len(self._data):
-                    try_(broker.next, exception=_OutOfMoneyError)
+                    # Re-run broker one last time to handle orders placed in the last strategy
+                    # iteration. Use the same OHLC values as in the last broker iteration.
+                    if start < len(self._data):
+                        try_(broker.next, exception=_OutOfMoneyError)
 
             # Set data back to full length
             # for future `indicator._opts['data'].index` calls to work
@@ -1243,14 +1252,25 @@ class Backtest:
 
             equity = pd.Series(broker._equity).bfill().fillna(broker._cash).values
             equity_real = pd.Series(broker._equity_real).bfill().fillna(broker._cash).values
-            self._results = compute_stats(
-                trades=broker.closed_trades,
-                equity=equity,
-                equity_real=equity_real,
-                ohlc_data=self._data,
-                risk_free_rate=0.0,
-                strategy_instance=strategy,
-            )
+
+            self._results = pd.Series();
+            if len(broker.closed_trades) > 0:
+                self._results = compute_stats(
+                    trades=broker.closed_trades,
+                    equity=equity,
+                    equity_real=equity_real,
+                    ohlc_data=self._data,
+                    risk_free_rate=0.0,
+                    strategy_instance=strategy,
+                )
+
+            if signal_marker:
+                if len(strategy.orders) > 0:
+                    signal = {}
+                    signal['操作时间'] = strategy.data.index[-1].strftime('%Y-%m-%d')
+                    signal['是否持仓'] = '是' if strategy.position.size else '否'
+                    signal['操作'] = strategy.orders.__repr__()
+                    return pd.concat([self._results, pd.Series(signal)])
 
         return self._results
 
@@ -1566,7 +1586,7 @@ class Backtest:
 
     def plot(self, *, results: pd.Series = None, filename=None, plot_width=None,
              plot_equity=True, plot_return=True, plot_pl=True,
-             plot_volume=True, plot_drawdown=False, plot_trades=True, plot_bars_type='kline',
+             plot_volume=True, plot_drawdown=True, plot_trades=True, plot_bars_type='kline',
              smooth_equity=False, relative_equity=True,
              superimpose: Union[bool, str] = False,
              resample=True, reverse_indicators=False,

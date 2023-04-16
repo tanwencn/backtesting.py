@@ -228,6 +228,7 @@ def plot(*, results: pd.Series,
                                            index[-1] + pad))) if index.size > 1 else {}
     fig_ohlc = new_bokeh_figure(**_kwargs)
     figs_above_ohlc, figs_below_ohlc = [], []
+    df["PctChange"] = df["Close"].pct_change()
     source = ColumnDataSource(df)
     source.add((df.Close >= df.Open).values.astype(np.uint8).astype(str), 'inc')
 
@@ -271,6 +272,7 @@ return this.labels[index] || "";
         ('最高价', '@High{0,0.0[0000]}'),
         ('最低价', '@Low{0,0.0[0000]}'),
         ('收盘价', '@Close{0,0.0[0000]}'),
+        ('涨跌幅', '@PctChange{0,0.00%}'),
         ('成交量', '@Volume{0,0.0[0000]}')]
 
     def new_indicator_figure(**kwargs):
@@ -391,6 +393,11 @@ return this.labels[index] || "";
                         legend_format.format(equity.iloc[-1] * (100 if relative_equity else 1))),
                     color='blue', size=8)
 
+        if len(trades) > 0:
+            win_rate = round(len(trades[trades['PnL'] > 0])/len(trades)*100, 2)
+            fig.scatter(index[-1], equity.values[-1],
+                        legend_label=f'胜率 ({win_rate}%)')
+
         if not plot_drawdown:
             drawdown = equity_data['DrawdownPct']
             argmax = drawdown.idxmax()
@@ -400,23 +407,22 @@ return this.labels[index] || "";
         dd_timedelta_label = df['datetime'].iloc[int(round(dd_end))] - df['datetime'].iloc[dd_start]
         fig.line([dd_start, dd_end], equity.iloc[dd_start],
                  line_color='red', line_width=1,
-                 legend_label=f'最大恢复时间. ({dd_timedelta_label})'
+                 legend_label=f'最长恢复时间. ({dd_timedelta_label})'
                  .replace(' 00:00:00', '')
                  .replace('(0 days ', '('))
-
-        figs_above_ohlc.append(fig)
+        return fig
 
     def _plot_drawdown_section():
         """Drawdown section"""
-        fig = new_indicator_figure(y_axis_label="Drawdown")
+        fig = new_indicator_figure(y_axis_label="回撤")
         drawdown = equity_data['DrawdownPct']
         argmax = drawdown.idxmax()
         source.add(drawdown, 'drawdown')
         r = fig.line('index', 'drawdown', source=source, line_width=1.3)
         fig.scatter(argmax, drawdown[argmax],
-                    legend_label='Peak (-{:.1f}%)'.format(100 * drawdown[argmax]),
+                    legend_label='最大回撤 (-{:.1f}%)'.format(100 * drawdown[argmax]),
                     color='red', size=8)
-        set_tooltips(fig, [('Drawdown', '@drawdown{-0.[0]%}')], renderers=[r])
+        set_tooltips(fig, [('回撤', '@drawdown{-0.[0]%}')], renderers=[r])
         fig.yaxis.formatter = NumeralTickFormatter(format="-0.[0]%")
         return fig
 
@@ -450,12 +456,12 @@ return this.labels[index] || "";
 
     def _plot_volume_section():
         """Volume section"""
-        fig = new_indicator_figure(y_axis_label="Volume")
+        fig = new_indicator_figure(y_axis_label="成交量")
         fig.xaxis.formatter = fig_ohlc.xaxis[0].formatter
         fig.xaxis.visible = True
         fig_ohlc.xaxis.visible = False  # Show only Volume's xaxis
         r = fig.vbar('index', BAR_WIDTH, 'Volume', source=source, color=inc_cmap)
-        set_tooltips(fig, [('Volume', '@Volume{0.00 a}')], renderers=[r])
+        set_tooltips(fig, [('成交量', '@Volume{0.00 a}')], renderers=[r])
         fig.yaxis.formatter = NumeralTickFormatter(format="0 a")
         return fig
 
@@ -524,7 +530,7 @@ return this.labels[index] || "";
         trade_source.add(trades[['EntryPrice', 'ExitPrice']].values.tolist(), 'position_lines_ys')
         fig_ohlc.multi_line(xs='position_lines_xs', ys='position_lines_ys',
                             source=trade_source, line_color=trades_cmap,
-                            legend_label=f'Trades ({len(trades)})',
+                            legend_label=f'交易记录 ({len(trades)})',
                             line_width=8, line_alpha=1, line_dash='dotted')
 
     def _plot_indicators():
@@ -622,13 +628,16 @@ return this.labels[index] || "";
     # Construct figure ...
 
     if plot_equity:
-        _plot_equity_section(is_return=plot_return)
+        fig_equity = _plot_equity_section(is_return=plot_return)
+        figs_above_ohlc.append(fig_equity)
 
     if plot_drawdown:
-        figs_above_ohlc.append(_plot_drawdown_section())
+        fig_drawdown = _plot_drawdown_section()
+        figs_above_ohlc.append(fig_drawdown)
 
     if plot_pl:
-        figs_above_ohlc.append(_plot_pl_section())
+        fig_pl = _plot_pl_section()
+        figs_above_ohlc.append(fig_pl)
 
     if plot_volume:
         fig_volume = _plot_volume_section()
@@ -654,6 +663,10 @@ return this.labels[index] || "";
                           source=source)
     if plot_volume:
         custom_js_args.update(volume_range=fig_volume.y_range)
+    if plot_equity:
+        custom_js_args.update(equity_range=fig_equity.y_range)
+    if plot_drawdown:
+        custom_js_args.update(drawdown_range=fig_drawdown.y_range)
 
     fig_ohlc.x_range.js_on_change('end', CustomJS(args=custom_js_args,  # type: ignore
                                                   code=_AUTOSCALE_JS_CALLBACK))
