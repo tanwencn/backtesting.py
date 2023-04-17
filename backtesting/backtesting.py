@@ -1149,7 +1149,7 @@ class Backtest:
         self._strategy = strategy
         self._results: Optional[pd.Series] = None
 
-    def run(self, signal_marker: bool = False, **kwargs) -> pd.Series:
+    def run(self, signal_marker: bool = False, attachment: bool = True, **kwargs) -> pd.Series:
         """
         Run the backtest. Returns `pd.Series` with results and statistics.
 
@@ -1253,16 +1253,17 @@ class Backtest:
             equity = pd.Series(broker._equity).bfill().fillna(broker._cash).values
             equity_real = pd.Series(broker._equity_real).bfill().fillna(broker._cash).values
 
-            self._results = pd.Series();
-            if len(broker.closed_trades) > 0:
-                self._results = compute_stats(
-                    trades=broker.closed_trades,
-                    equity=equity,
-                    equity_real=equity_real,
-                    ohlc_data=self._data,
-                    risk_free_rate=0.0,
-                    strategy_instance=strategy,
-                )
+            #self._results = pd.Series();
+            #if len(broker.closed_trades) > 0:
+            self._results = compute_stats(
+                trades=broker.closed_trades,
+                equity=equity,
+                equity_real=equity_real,
+                ohlc_data=self._data,
+                risk_free_rate=0.0,
+                strategy_instance=strategy,
+                attachment=attachment,
+            )
 
             if signal_marker:
                 if len(strategy.orders) > 0:
@@ -1270,7 +1271,7 @@ class Backtest:
                     signal['操作时间'] = strategy.data.index[-1].strftime('%Y-%m-%d')
                     signal['是否持仓'] = '是' if strategy.position.size else '否'
                     signal['操作'] = strategy.orders.__repr__()
-                    return pd.concat([self._results, pd.Series(signal)])
+                    return pd.concat([pd.Series(signal), self._results])
 
         return self._results
 

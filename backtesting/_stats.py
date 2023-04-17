@@ -39,6 +39,7 @@ def compute_stats(
         ohlc_data: pd.DataFrame,
         strategy_instance: 'Strategy',
         risk_free_rate: float = 0,
+        attachment: bool = True,
 ) -> pd.Series:
     assert -1 < risk_free_rate < 1
 
@@ -156,9 +157,10 @@ def compute_stats(
     #s.loc['Sortino Ratio'] = (annualized_return - risk_free_rate) / (np.sqrt(np.mean(day_returns.clip(-np.inf, 0) ** 2)) * np.sqrt(annual_trading_days))  # noqa: E501
     s.loc['Calmar Ratio'] = annualized_return / (-max_dd or np.nan)
 
-    s.loc['_strategy'] = strategy_instance
-    s.loc['_equity_curve'] = equity_df
-    s.loc['_trades'] = trades_df
+    if attachment:
+        s.loc['_strategy'] = strategy_instance
+        s.loc['_equity_curve'] = equity_df
+        s.loc['_trades'] = trades_df
 
     s = _Stats(s)
     return s

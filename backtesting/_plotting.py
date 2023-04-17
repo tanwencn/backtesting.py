@@ -564,6 +564,8 @@ return this.labels[index] || "";
             if not value._opts.get('plot') or _too_many_dims(value):
                 continue
 
+
+
             is_overlay = value._opts['overlay']
             is_scatter = value._opts['scatter']
             if is_overlay:

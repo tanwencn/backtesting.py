@@ -29,7 +29,15 @@ window._bt_autoscale_timeout = setTimeout(function () {
 
     if (volume_range) {
         max = Math.max.apply(null, source.data['Volume'].slice(i, j));
-        _bt_scale_range(volume_range, 0, max * 1.03, false);
+        _bt_scale_range(volume_range, 0, max * 1.05, false);
+    }
+    if (equity_range) {
+        max = Math.max.apply(null, source.data['equity'].slice(i, j));
+        _bt_scale_range(equity_range, 0, max * 1.1, false);
+    }
+    if (drawdown_range) {
+        max = Math.max.apply(null, source.data['drawdown'].slice(i, j));
+        _bt_scale_range(drawdown_range, 0, max * 1.05, false);
     }
 
 }, 50);
