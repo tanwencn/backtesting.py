@@ -168,7 +168,7 @@ def plot(*, results: pd.Series,
          filename='', plot_width=None,
          plot_equity=True, plot_return=False, plot_pl=True,
          plot_volume=True, plot_drawdown=False, plot_trades=True,
-         plot_bars_type='123',
+         plot_bars_type='close',
          smooth_equity=False, relative_equity=True,
          superimpose=True, resample=True,
          reverse_indicators=True,
@@ -180,7 +180,9 @@ def plot(*, results: pd.Series,
     # plot() contain some previous run's cruft data (was noticed when
     # TestPlot.test_file_size() test was failing).
     if not filename and not IS_JUPYTER_NOTEBOOK:
-        filename = _windos_safe_filename(str(results._strategy))
+        filename = 'html/' + _windos_safe_filename(str(results._strategy))
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
     _bokeh_reset(filename)
 
     COLORS = [BEAR_COLOR, BULL_COLOR]
@@ -394,7 +396,7 @@ return this.labels[index] || "";
                     color='blue', size=8)
 
         if len(trades) > 0:
-            win_rate = round(len(trades[trades['PnL'] > 0])/len(trades)*100, 2)
+            win_rate = round(len(trades[trades['PnL'] > 0]) / len(trades) * 100, 2)
             fig.scatter(index[-1], equity.values[-1],
                         legend_label=f'胜率 ({win_rate}%)')
 
@@ -521,9 +523,6 @@ return this.labels[index] || "";
                               line_color="black", fill_color=inc_cmap)
         return r
 
-    def _plot_ohlc_kline(source):
-        pass
-
     def _plot_ohlc_trades():
         """Trade entry / exit markers on OHLC plot"""
         trade_source.add(trades[['EntryBar', 'ExitBar']].values.tolist(), 'position_lines_xs')
@@ -563,8 +562,6 @@ return this.labels[index] || "";
             # _Array without Strategy.I()
             if not value._opts.get('plot') or _too_many_dims(value):
                 continue
-
-
 
             is_overlay = value._opts['overlay']
             is_scatter = value._opts['scatter']
@@ -643,7 +640,18 @@ return this.labels[index] || "";
 
     if plot_volume:
         fig_volume = _plot_volume_section()
+        fig_ohlc.min_border_bottom = 1
+        fig_volume.min_border_top = 1
         figs_below_ohlc.append(fig_volume)
+
+        # 创建第二个Y轴用于显示成交量
+        # from bokeh.models import LinearAxis
+        # fig_ohlc.y_range = Range1d(start=min(df.Low), end=max(df.High))
+        # fig_ohlc.vbar('index', BAR_WIDTH, 'Volume', source=source, color=inc_cmap, legend_label='Volume',
+        #               y_range_name="volume_range")
+        # fig_ohlc.extra_y_ranges = {"volume_range": Range1d(start=0, end=max(df.Volume) * 5)}
+        # fig_ohlc.add_layout(LinearAxis(y_range_name="volume_range"), 'right')
+        # fig_ohlc.right[0].visible = False
 
     if superimpose and is_datetime_index:
         _plot_superimposed_ohlc()
@@ -688,8 +696,10 @@ return this.labels[index] || "";
             f.legend.label_text_font_size = '8pt'
             f.legend.click_policy = "hide"
         f.min_border_left = 0
-        f.min_border_top = 3
-        f.min_border_bottom = 6
+        if f.min_border_top is None:
+            f.min_border_top = 3
+        if f.min_border_bottom is None:
+            f.min_border_bottom = 6
         f.min_border_right = 10
         f.outline_line_color = '#666666'
 

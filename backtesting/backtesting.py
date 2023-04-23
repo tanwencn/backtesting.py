@@ -197,6 +197,9 @@ class Strategy(metaclass=ABCMeta):
             super().next()
         """
 
+    def trade(self, trade):
+        pass
+
     class __FULL_EQUITY(float):  # noqa: N801
         def __repr__(self): return '.9999'
 
@@ -218,7 +221,7 @@ class Strategy(metaclass=ABCMeta):
         """
         assert 0 < size < 1 or round(size) == size, \
             "size must be a positive fraction of equity, or a positive whole number of units"
-        return self._broker.new_order(size, limit, stop, sl, tp, tag)
+        return self._broker.new_order(size, limit, stop, sl, tp, tag, transaction_func=self.transaction)
 
     def sell(self, *,
              size: float = _FULL_EQUITY,
@@ -238,12 +241,19 @@ class Strategy(metaclass=ABCMeta):
         """
         assert 0 < size < 1 or round(size) == size, \
             "size must be a positive fraction of equity, or a positive whole number of units"
-        return self._broker.new_order(-size, limit, stop, sl, tp, tag)
+        return self._broker.new_order(-size, limit, stop, sl, tp, tag, transaction_func=self.transaction)
+
+    def transaction(self, order) -> bool:
+        return True
 
     @property
     def equity(self) -> float:
         """Current account equity (cash plus assets)."""
         return self._broker.equity
+
+    @property
+    def cash(self) -> float:
+        return self._broker._cash
 
     @property
     def data(self) -> _Data:
@@ -400,7 +410,8 @@ class Order:
                  sl_price: Optional[float] = None,
                  tp_price: Optional[float] = None,
                  parent_trade: Optional['Trade'] = None,
-                 tag: object = None):
+                 tag: object = None,
+                 transaction_func: Optional[callable] = None):
         self.__broker = broker
         assert size != 0
         self.__size = size
@@ -410,6 +421,7 @@ class Order:
         self.__tp_price = tp_price
         self.__parent_trade = parent_trade
         self.__tag = tag
+        self.__transaction_func = transaction_func
 
     def _replace(self, **kwargs):
         for k, v in kwargs.items():
@@ -427,6 +439,12 @@ class Order:
                                                  ('contingent', self.is_contingent),
                                                  ('tag', self.__tag),
                                              ) if value is not None))
+
+    def transaction(self):
+        closure_func = self.__transaction_func
+        if closure_func is None:
+            return True
+        return closure_func(self)
 
     def cancel(self):
         """Cancel the order."""
@@ -743,7 +761,8 @@ class _Broker:
                   tp: Optional[float] = None,
                   tag: object = None,
                   *,
-                  trade: Optional[Trade] = None):
+                  trade: Optional[Trade] = None,
+                  transaction_func: Optional[callable] = None):
         """
         Argument size indicates whether the order is long or short
         """
@@ -767,7 +786,7 @@ class _Broker:
                     "Short orders require: "
                     f"TP ({tp}) < LIMIT ({limit or stop or adjusted_price}) < SL ({sl})")
 
-        order = Order(self, size, limit, stop, sl, tp, trade, tag)
+        order = Order(self, size, limit, stop, sl, tp, trade, tag, transaction_func)
         # Put the new order in the order queue,
         # inserting SL/TP/trade-closing orders in-front
         if trade:
@@ -837,6 +856,10 @@ class _Broker:
 
             # Related SL/TP order was already removed
             if order not in self.orders:
+                continue
+
+            # 未达到目标执行条件则删除
+            if not order.transaction():
                 continue
 
             # Check if stop condition was hit
@@ -1233,6 +1256,9 @@ class Backtest:
                 except _OutOfMoneyError:
                     break
 
+                for trade in broker.trades:
+                    strategy.trade(trade)
+
                 # Next tick, a moment before bar close
                 strategy.next()
             else:
@@ -1587,9 +1613,9 @@ class Backtest:
 
     def plot(self, *, results: pd.Series = None, filename=None, plot_width=None,
              plot_equity=True, plot_return=True, plot_pl=True,
-             plot_volume=True, plot_drawdown=True, plot_trades=True, plot_bars_type='kline',
+             plot_volume=True, plot_drawdown=False, plot_trades=True, plot_bars_type='kline',
              smooth_equity=False, relative_equity=True,
-             superimpose: Union[bool, str] = False,
+             superimpose: Union[bool, str] = True,
              resample=True, reverse_indicators=False,
              show_legend=True, open_browser=True):
         """
