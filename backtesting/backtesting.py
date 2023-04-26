@@ -345,6 +345,18 @@ class Position:
         return self.size != 0
 
     @property
+    def cost_price(self) -> float:
+        """Calculate the cost basis of the position."""
+        total_cost = 0
+        total_size = 0
+        for trade in self.__broker.trades:
+            total_cost += trade.entry_price
+            total_size += trade.size
+        if total_size == 0:
+            return 0.0
+        return total_cost / total_size
+
+    @property
     def size(self) -> float:
         """Position size in units of asset. Negative if position is short."""
         return sum(trade.size for trade in self.__broker.trades)
@@ -372,12 +384,13 @@ class Position:
         """True if the position is short (position size is negative)."""
         return self.size < 0
 
-    def close(self, portion: float = 1.):
+    def close(self, portion: float = 1., tag=None):
         """
         Close portion of position by closing `portion` of each active trade. See `Trade.close`.
         """
         for trade in self.__broker.trades:
-            trade.close(portion)
+            if tag is None or trade.tag == tag:
+                trade.close(portion)
 
     def __repr__(self):
         return f'<Position: {self.size} ({len(self.__broker.trades)} trades)>'
@@ -429,7 +442,7 @@ class Order:
         return self
 
     def __repr__(self):
-        return '<Order {}>'.format(', '.join(f'{param}={round(value, 5)}'
+        return '<Order {}>'.format(', '.join(f'{param}={value}'
                                              for param, value in (
                                                  ('size', self.__size),
                                                  ('limit', self.__limit_price),
@@ -1279,8 +1292,8 @@ class Backtest:
             equity = pd.Series(broker._equity).bfill().fillna(broker._cash).values
             equity_real = pd.Series(broker._equity_real).bfill().fillna(broker._cash).values
 
-            #self._results = pd.Series();
-            #if len(broker.closed_trades) > 0:
+            # self._results = pd.Series();
+            # if len(broker.closed_trades) > 0:
             self._results = compute_stats(
                 trades=broker.closed_trades,
                 equity=equity,
