@@ -350,11 +350,11 @@ class Position:
         total_cost = 0
         total_size = 0
         for trade in self.__broker.trades:
-            total_cost += trade.entry_price
+            total_cost += trade.entry_price/trade.size
             total_size += trade.size
         if total_size == 0:
             return 0.0
-        return total_cost / total_size
+        return total_cost * total_size
 
     @property
     def size(self) -> float:
@@ -1630,7 +1630,7 @@ class Backtest:
              smooth_equity=False, relative_equity=True,
              superimpose: Union[bool, str] = True,
              resample=True, reverse_indicators=False,
-             show_legend=True, open_browser=True):
+             show_legend=True, open_browser=True, is_exit=False):
         """
         Plot the progression of the last backtest run.
 
@@ -1715,7 +1715,7 @@ class Backtest:
                 raise RuntimeError('First issue `backtest.run()` to obtain results.')
             results = self._results
 
-        return plot(
+        p = plot(
             results=results,
             df=self._data,
             indicators=results._strategy._indicators,
@@ -1735,3 +1735,8 @@ class Backtest:
             reverse_indicators=reverse_indicators,
             show_legend=show_legend,
             open_browser=open_browser)
+
+        if is_exit:
+            exit()
+
+        return p
