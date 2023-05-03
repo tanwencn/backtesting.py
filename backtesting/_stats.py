@@ -88,10 +88,13 @@ def compute_stats(
     s.loc['End'] = index[-1]
     s.loc['Duration'] = s.End - s.Start
 
-    # 将交易按年份分组，并计算每年的盈利情况
-    profits = trades_df.groupby(trades_df['EntryTime'].dt.year)['PnL'].sum()
-    # 统计盈利年份数
-    s.loc['亏损年数'] = (profits < 0).sum()
+    if len(trades_df['EntryTime']) > 0 :
+        # 将交易按年份分组，并计算每年的盈利情况
+        profits = trades_df.groupby(trades_df['EntryTime'].dt.year)['PnL'].sum()
+        # 统计盈利年份数
+        s.loc['亏损年数'] = (profits < 0).sum()
+    else:
+        s.loc['亏损年数'] = 0
 
     have_position = np.repeat(0, len(index))
     for t in trades_df.itertuples(index=False):
