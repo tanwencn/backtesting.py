@@ -165,8 +165,8 @@ def compute_stats(
     #s.loc['Sortino Ratio'] = (annualized_return - risk_free_rate) / (np.sqrt(np.mean(day_returns.clip(-np.inf, 0) ** 2)) * np.sqrt(annual_trading_days))  # noqa: E501
     #s.loc['Calmar Ratio'] = annualized_return / (-max_dd or np.nan)
 
+    s.loc['_strategy'] = strategy_instance
     if attachment:
-        s.loc['_strategy'] = strategy_instance
         s.loc['_equity_curve'] = equity_df
         s.loc['_trades'] = trades_df
 
