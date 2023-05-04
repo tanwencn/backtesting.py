@@ -92,9 +92,9 @@ def compute_stats(
         # 将交易按年份分组，并计算每年的盈利情况
         profits = trades_df.groupby(trades_df['EntryTime'].dt.year)['PnL'].sum()
         # 统计盈利年份数
-        s.loc['亏损年数'] = (profits < 0).sum()
+        s.loc['盈亏年数[%]'] = round((profits > 0).sum()/len(profits), 2)*100
     else:
-        s.loc['亏损年数'] = 0
+        s.loc['盈亏年数[%]'] = 0.0
 
     have_position = np.repeat(0, len(index))
     for t in trades_df.itertuples(index=False):
@@ -161,9 +161,9 @@ def compute_stats(
     s.loc['盈利因子'] = returns[returns > 0].sum() / (abs(returns[returns < 0].sum()) or np.nan)  # noqa: E501
     s.loc['期望收益率[%]'] = returns.mean() * 100
     s.loc['SQN'] = np.sqrt(n_trades) * pl.mean() / (pl.std() or np.nan)
-    s.loc['Kelly Criterion'] = win_rate - (1 - win_rate) / (pl[pl > 0].mean() / -pl[pl < 0].mean())
+    #s.loc['Kelly Criterion'] = win_rate - (1 - win_rate) / (pl[pl > 0].mean() / -pl[pl < 0].mean())
     #s.loc['Sortino Ratio'] = (annualized_return - risk_free_rate) / (np.sqrt(np.mean(day_returns.clip(-np.inf, 0) ** 2)) * np.sqrt(annual_trading_days))  # noqa: E501
-    s.loc['Calmar Ratio'] = annualized_return / (-max_dd or np.nan)
+    #s.loc['Calmar Ratio'] = annualized_return / (-max_dd or np.nan)
 
     if attachment:
         s.loc['_strategy'] = strategy_instance
