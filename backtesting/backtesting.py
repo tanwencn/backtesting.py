@@ -52,10 +52,15 @@ class Strategy(metaclass=ABCMeta):
     """
 
     def __init__(self, broker, data, params):
+        self._logs = []
         self._indicators = []
         self._broker: _Broker = broker
         self._data: _Data = data
         self._params = self._check_params(params)
+
+    def log(self, content:str):
+        self._logs.append(pd.Series({'index':self.data.index[-1], 'action':content}))
+
 
     def __repr__(self):
         return '<Strategy ' + str(self) + '>'
@@ -1304,14 +1309,13 @@ class Backtest:
                 strategy_instance=strategy,
                 attachment=attachment,
             )
-
-            if signal_marker:
-                if len(strategy.orders) > 0:
-                    signal = {}
-                    signal['操作时间'] = strategy.data.index[-1].strftime('%Y-%m-%d')
-                    signal['是否持仓'] = '是' if strategy.position.size else '否'
-                    signal['操作'] = strategy.orders.__repr__()
-                    return pd.concat([pd.Series(signal), self._results])
+            # if signal_marker:
+            #     if len(strategy.orders) > 0:
+            #         signal = {}
+            #         signal['操作时间'] = strategy.data.index[-1].strftime('%Y-%m-%d')
+            #         signal['是否持仓'] = '是' if strategy.position.size else '否'
+            #         signal['操作'] = strategy.orders.__repr__()
+            #         return pd.concat([pd.Series(signal), self._results])
 
         return self._results
 
