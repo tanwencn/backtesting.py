@@ -67,7 +67,7 @@ _EQUITY_AGG = {
     'DrawdownDuration': 'max',
 }
 
-def shift(arr, num: int, fill_value=np.nan):
+def shift(arr, num: int=1, fill_value=np.nan):
     if num == 0:
         res = arr
     elif num > 0:
@@ -77,9 +77,9 @@ def shift(arr, num: int, fill_value=np.nan):
 
     return type(arr)(res, **vars(arr))
 
-def pine_barssince(condition: Sequence[bool]) -> int:
+def pine_barssince(condition: Sequence[bool], start=-1) -> int:
     count = 0
-    for i in range(-1, -len(condition) - 1, -1):
+    for i in range(start, -len(condition) - 1, -1):
         if not condition[i]:
             break
         count += 1

@@ -565,6 +565,7 @@ return this.labels[index] || "";
 
             is_overlay = value._opts['overlay']
             is_scatter = value._opts['scatter']
+            show_columnar = int(value._opts['columnar'])
             if is_overlay:
                 fig = fig_ohlc
             else:
@@ -596,7 +597,13 @@ return this.labels[index] || "";
                             legend_label=legend_label, line_color=color,
                             line_width=1.3)
                 else:
-                    if is_scatter:
+                    if show_columnar==j:
+                        # 根据柱状图值设置颜色参数
+                        colors_name = f'{source_name}_colors'
+                        source.add(np.where(np.pad(np.diff(arr), (1, 0), mode='constant', constant_values=np.nan) > 0, '1', '0'), colors_name)
+                        columnar_cmap=factor_cmap(colors_name, COLORS, ['0', '1'])
+                        r = fig.vbar('index', BAR_WIDTH / 2 * .9, source=source, color=columnar_cmap, top=source_name, legend_label=legend_label)
+                    elif is_scatter:
                         r = fig.scatter(
                             'index', source_name, source=source,
                             legend_label=LegendStr(legend_label), color=color,

@@ -184,6 +184,14 @@ class _Data:
         return self.__get_array('Volume')
 
     @property
+    def Date(self) -> _Array:
+        return self.__get_array('__index').strftime("%Y-%m-%d")
+
+    @property
+    def DateTime(self) -> _Array:
+        return self.__get_array('__index').strftime("%Y-%m-%d %H:%M:%S")
+
+    @property
     def index(self) -> pd.DatetimeIndex:
         return self.__get_array('__index')
 
