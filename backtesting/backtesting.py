@@ -20,6 +20,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
+import talib
 from numpy.random import default_rng
 
 try:
@@ -41,8 +42,18 @@ __pdoc__ = {
     'Trade.__init__': False,
 }
 
+class IndicatorStrategy:
+    def SMA(self, *args, period=30, name=None, plot=True, overlay=True, color=None,
+            scatter=False, shifting=0, decimals=2, columnar=False, **kwargs) -> np.ndarray:
+        return self.I(talib.MA, *args, timeperiod=period, name=name, plot=plot, overlay=overlay, color=color, scatter=scatter,
+                  shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
 
-class Strategy(metaclass=ABCMeta):
+    def MACD(self, *args, fastperiod=12, slowperiod=26, signalperiod=9, name=None, plot=True, overlay=None, color=None,
+             scatter=False, shifting=0, decimals=2, columnar=3, **kwargs) -> np.ndarray:
+        return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod, name=name, plot=plot, overlay=overlay, color=color, scatter=scatter,
+                  shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
+
+class Strategy(IndicatorStrategy, metaclass=ABCMeta):
     """
     A trading strategy base class. Extend this class and
     override methods
@@ -58,9 +69,8 @@ class Strategy(metaclass=ABCMeta):
         self._data: _Data = data
         self._params = self._check_params(params)
 
-    def log(self, content:str):
-        self._logs.append(pd.Series({'index':self.data.index[-1], 'action':content}))
-
+    def log(self, content: str):
+        self._logs.append(pd.Series({'index': self.data.index[-1], 'action': content}))
 
     def __repr__(self):
         return '<Strategy ' + str(self) + '>'
@@ -84,7 +94,7 @@ class Strategy(metaclass=ABCMeta):
 
     def I(self,  # noqa: E743
           func: Callable, *args,
-          name=None, plot=True, overlay=None, color=None, scatter=False, shifting=0,
+          name=None, plot=True, overlay=None, color=None, scatter=False, shifting=0, decimals=2, columnar=False,
           **kwargs) -> np.ndarray:
         """
         Declare an indicator. An indicator is just an array of values,
@@ -163,8 +173,10 @@ class Strategy(metaclass=ABCMeta):
             value = np.roll(value, shifting)
             value[..., :shifting] = np.nan
 
+        if isinstance(value, np.ndarray):
+            value = np.around(value, decimals=decimals)
         value = _Indicator(value, name=name, plot=plot, overlay=overlay,
-                           color=color, scatter=scatter,
+                           color=color, scatter=scatter, columnar=columnar,
                            # _Indicator.s Series accessor uses this:
                            index=self.data.index)
 
@@ -202,7 +214,7 @@ class Strategy(metaclass=ABCMeta):
             super().next()
         """
 
-    def trade(self, trade):
+    def next_trade(self, trade, i):
         pass
 
     class __FULL_EQUITY(float):  # noqa: N801
@@ -355,7 +367,7 @@ class Position:
         total_cost = 0
         total_size = 0
         for trade in self.__broker.trades:
-            total_cost += trade.entry_price/trade.size
+            total_cost += trade.entry_price / trade.size
             total_size += trade.size
         if total_size == 0:
             return 0.0
@@ -389,7 +401,7 @@ class Position:
         """True if the position is short (position size is negative)."""
         return self.size < 0
 
-    def close(self, portion: float = 1., size:float=.0, tag=None):
+    def close(self, portion: float = 1., size: float = .0, tag=None):
         """
         Close portion of position by closing `portion` of each active trade. See `Trade.close`.
         """
@@ -600,8 +612,8 @@ class Trade:
     def _copy(self, **kwargs):
         return copy(self)._replace(**kwargs)
 
-    def close(self, portion: float = 1., size:float=.0):
-        if size==0.0:
+    def close(self, portion: float = 1., size: float = .0):
+        if size == 0.0:
             """Place new `Order` to close `portion` of the trade at next market price."""
             assert 0 < portion <= 1, "portion must be a fraction between 0 and 1"
             size = copysign(max(1, round(abs(self.__size) * portion)), -self.__size)
@@ -1275,8 +1287,8 @@ class Backtest:
                 except _OutOfMoneyError:
                     break
 
-                for trade in broker.trades:
-                    strategy.trade(trade)
+                for i, trade in enumerate(broker.trades):
+                    strategy.next_trade(trade, i + 1)
 
                 # Next tick, a moment before bar close
                 strategy.next()

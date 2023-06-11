@@ -17,6 +17,7 @@ from itertools import compress
 from numbers import Number
 from typing import Callable, Optional, Sequence, Union
 
+import numpy
 import numpy as np
 import pandas as pd
 
@@ -84,6 +85,17 @@ def pine_barssince(condition: Sequence[bool], start=-1) -> int:
             break
         count += 1
     return count
+
+def pine_rise_range(arr:numpy.array) -> float:
+    first_index = -1
+    for i in range(-1, -len(arr) - 1, -1):
+        if not arr[i] > arr[i-1]:
+            break
+        first_index -= 1
+    if first_index == -1:
+        return 0.0
+    return round((arr[-1] - arr[first_index]) / arr[first_index] * 100, 3)
+
 
 def barssince(condition: Sequence[bool], default=np.inf) -> int:
     """
@@ -502,6 +514,34 @@ class TrailingStrategy(Strategy):
             else:
                 trade.sl = min(trade.sl or np.inf,
                                self.data.Close[index] + self.__atr[index] * self.__n_atr)
+
+class TakeProfitByStopLossStrategy(Strategy):
+    """
+    盈亏比止损
+    """
+    __tp_sl_radio = 0.5
+    __tp_sl_skip_trade_num = 0
+
+    def set_radio(self, tp_radio: float = 0.5, skip_trade_num=0):
+        """
+        tp_radio设置盈亏比比例，基数为sl
+        skip_trade_num不处理的订单数。如3个订单，skip_trade_num=1 则只会处理前两个订单
+        """
+        self.__tp_sl_radio = tp_radio
+        self.__tp_sl_skip_trade_num = skip_trade_num
+
+    def next_trade(self, trade, i):
+        skip_trade_i = len(self.trades)-self.__tp_sl_skip_trade_num
+        if i > skip_trade_i:
+            return
+        tp = trade.entry_price + (trade.entry_price - trade.sl) * self.__tp_sl_radio
+        log_header = f"订单量：{len(self.trades)}；"
+        log = log_header
+        if tp != trade.tp:
+            log += "\n修改订单{i}止盈价：{tp}；"
+            trade.tp = tp
+        if log != log_header:
+            self.log(log)
 
 
 # Prevent pdoc3 documenting __init__ signature of Strategy subclasses
