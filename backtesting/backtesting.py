@@ -42,16 +42,20 @@ __pdoc__ = {
     'Trade.__init__': False,
 }
 
+
 class IndicatorStrategy:
     def SMA(self, *args, period=30, name=None, plot=True, overlay=True, color=None,
             scatter=False, shifting=0, decimals=2, columnar=False, **kwargs) -> np.ndarray:
-        return self.I(talib.MA, *args, timeperiod=period, name=name, plot=plot, overlay=overlay, color=color, scatter=scatter,
-                  shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
+        return self.I(talib.MA, *args, timeperiod=period, name=name, plot=plot, overlay=overlay, color=color,
+                      scatter=scatter,
+                      shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
 
     def MACD(self, *args, fastperiod=12, slowperiod=26, signalperiod=9, name=None, plot=True, overlay=None, color=None,
              scatter=False, shifting=0, decimals=2, columnar=3, **kwargs) -> np.ndarray:
-        return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod, name=name, plot=plot, overlay=overlay, color=color, scatter=scatter,
-                  shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
+        return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod,
+                      name=name, plot=plot, overlay=overlay, color=color, scatter=scatter,
+                      shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
+
 
 class Strategy(IndicatorStrategy, metaclass=ABCMeta):
     """
@@ -222,13 +226,16 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
 
     _FULL_EQUITY = __FULL_EQUITY(1 - sys.float_info.epsilon)
 
+    #precondition: lambda: a>b
     def buy(self, *,
             size: float = _FULL_EQUITY,
             limit: Optional[float] = None,
             stop: Optional[float] = None,
             sl: Optional[float] = None,
             tp: Optional[float] = None,
-            tag: object = None):
+            tag: Optional[str] = None,
+            precondition: Optional[callable] = None
+            ):
         """
         Place a new long order. For explanation of parameters, see `Order` and its properties.
 
@@ -238,7 +245,7 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
         """
         assert 0 < size < 1 or round(size) == size, \
             "size must be a positive fraction of equity, or a positive whole number of units"
-        return self._broker.new_order(size, limit, stop, sl, tp, tag, transaction_func=self.transaction)
+        return self._broker.new_order(size, limit, stop, sl, tp, tag, precondition=precondition)
 
     def sell(self, *,
              size: float = _FULL_EQUITY,
@@ -246,7 +253,8 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
              stop: Optional[float] = None,
              sl: Optional[float] = None,
              tp: Optional[float] = None,
-             tag: object = None):
+             tag: Optional[str] = None,
+             precondition: Optional[callable] = None):
         """
         Place a new short order. For explanation of parameters, see `Order` and its properties.
 
@@ -258,10 +266,7 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
         """
         assert 0 < size < 1 or round(size) == size, \
             "size must be a positive fraction of equity, or a positive whole number of units"
-        return self._broker.new_order(-size, limit, stop, sl, tp, tag, transaction_func=self.transaction)
-
-    def transaction(self, order) -> bool:
-        return True
+        return self._broker.new_order(-size, limit, stop, sl, tp, tag, precondition=precondition)
 
     @property
     def equity(self) -> float:
@@ -336,7 +341,7 @@ class _Orders(tuple):
             if not order.is_contingent:
                 order.cancel()
 
-    #检测是否存在未成交的挂单
+    # 检测是否存在未成交的挂单
     def not_contingent(self):
         len = 0
         for order in self:
@@ -452,7 +457,7 @@ class Order:
                  tp_price: Optional[float] = None,
                  parent_trade: Optional['Trade'] = None,
                  tag: object = None,
-                 transaction_func: Optional[callable] = None):
+                 precondition: Optional[callable] = None):
         self.__broker = broker
         assert size != 0
         self.__size = size
@@ -462,7 +467,7 @@ class Order:
         self.__tp_price = tp_price
         self.__parent_trade = parent_trade
         self.__tag = tag
-        self.__transaction_func = transaction_func
+        self.__precondition = precondition
 
     def _replace(self, **kwargs):
         for k, v in kwargs.items():
@@ -479,10 +484,11 @@ class Order:
                                                  ('tp', self.__tp_price),
                                                  ('contingent', self.is_contingent),
                                                  ('tag', self.__tag),
+                                                 ('precondition', str(self.__precondition)),
                                              ) if value is not None))
 
-    def transaction(self):
-        closure_func = self.__transaction_func
+    def precondition(self) -> bool:
+        closure_func = self.__precondition
         if closure_func is None:
             return True
         return closure_func(self)
@@ -804,7 +810,7 @@ class _Broker:
                   tag: object = None,
                   *,
                   trade: Optional[Trade] = None,
-                  transaction_func: Optional[callable] = None):
+                  precondition: Optional[callable] = None):
         """
         Argument size indicates whether the order is long or short
         """
@@ -828,7 +834,7 @@ class _Broker:
                     "Short orders require: "
                     f"TP ({tp}) < LIMIT ({limit or stop or adjusted_price}) < SL ({sl})")
 
-        order = Order(self, size, limit, stop, sl, tp, trade, tag, transaction_func)
+        order = Order(self, size, limit, stop, sl, tp, trade, tag, precondition)
         # Put the new order in the order queue,
         # inserting SL/TP/trade-closing orders in-front
         if trade:
@@ -901,7 +907,8 @@ class _Broker:
                 continue
 
             # 未达到目标执行条件则删除
-            if not order.transaction():
+            if not order.precondition():
+                self.orders.remove(order)
                 continue
 
             # Check if stop condition was hit
