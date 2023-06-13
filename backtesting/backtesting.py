@@ -307,7 +307,7 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
         return self._broker.position
 
     @property
-    def orders(self) -> 'Tuple[Order, ...]':
+    def orders(self) -> '_Orders[Order, ...]':
         """List of orders (see `Order`) waiting for execution."""
         return _Orders(self._broker.orders)
 
@@ -327,11 +327,22 @@ class _Orders(tuple):
     TODO: remove this class. Only for deprecation.
     """
 
+    def filterTags(self, tag) -> '_Orders[Order, ...]':
+        return _Orders([order for order in self if order.tag == tag])
+
     def cancel(self):
         """Cancel all non-contingent (i.e. SL/TP) orders."""
         for order in self:
             if not order.is_contingent:
                 order.cancel()
+
+    #检测是否存在未成交的挂单
+    def not_contingent(self):
+        len = 0
+        for order in self:
+            if not order.is_contingent:
+                len += 1
+        return len
 
     def __getattr__(self, item):
         # TODO: Warn on deprecations from the previous version. Remove in the next.
