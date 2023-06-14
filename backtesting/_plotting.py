@@ -563,16 +563,16 @@ return this.labels[index] || "";
             if not value._opts.get('plot') or _too_many_dims(value):
                 continue
 
-            is_overlay = value._opts['overlay']
-            is_scatter = value._opts['scatter']
-            show_columnar = int(value._opts['columnar'])
+            is_overlay = value._opts.get('overlay', None)
+            is_scatter = value._opts.get('scatter', None)
+            show_columnar = int(value._opts.get('columnar', 0))
             if is_overlay:
                 fig = fig_ohlc
             else:
                 fig = new_indicator_figure()
                 indicator_figs.append(fig)
             tooltips = []
-            colors = value._opts['color']
+            colors = value._opts.get('color', None)
             colors = colors and cycle(_as_list(colors)) or (
                 cycle([next(ohlc_colors)]) if is_overlay else colorgen())
             legend_label = LegendStr(value.name)

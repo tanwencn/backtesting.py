@@ -43,21 +43,22 @@ __pdoc__ = {
 }
 
 
-class IndicatorStrategy:
-    def SMA(self, *args, period=30, name=None, plot=True, overlay=True, color=None,
-            scatter=False, shifting=0, decimals=2, columnar=False, **kwargs) -> np.ndarray:
-        return self.I(talib.MA, *args, timeperiod=period, name=name, plot=plot, overlay=overlay, color=color,
-                      scatter=scatter,
-                      shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
-
-    def MACD(self, *args, fastperiod=12, slowperiod=26, signalperiod=9, name=None, plot=True, overlay=None, color=None,
-             scatter=False, shifting=0, decimals=2, columnar=3, **kwargs) -> np.ndarray:
-        return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod, signalperiod=signalperiod,
-                      name=name, plot=plot, overlay=overlay, color=color, scatter=scatter,
-                      shifting=shifting, decimals=decimals, columnar=columnar, **kwargs)
+class IndicatorAbs:
+    @abstractmethod
+    def I(self, func: Callable, *args, **kwargs) -> _Indicator:
+        pass
 
 
-class Strategy(IndicatorStrategy, metaclass=ABCMeta):
+class IndicatorBasic(IndicatorAbs):
+    def SMA(self, *args, period=30) -> _Indicator:
+        return self.I(talib.MA, *args, timeperiod=period)
+
+    def MACD(self, *args, fastperiod=12, slowperiod=26, signalperiod=9) -> _Indicator:
+        return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod,
+                      signalperiod=signalperiod).overlay(None).columnar(3)
+
+
+class Strategy(IndicatorBasic, metaclass=ABCMeta):
     """
     A trading strategy base class. Extend this class and
     override methods
@@ -96,10 +97,7 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
             setattr(self, k, v)
         return params
 
-    def I(self,  # noqa: E743
-          func: Callable, *args,
-          name=None, plot=True, overlay=None, color=None, scatter=False, shifting=0, decimals=2, columnar=False,
-          **kwargs) -> np.ndarray:
+    def I(self, func: Callable, *args, **kwargs) -> _Indicator:
         """
         Declare an indicator. An indicator is just an array of values,
         but one that is revealed gradually in
@@ -136,13 +134,9 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
             def init():
                 self.sma = self.I(ta.SMA, self.data.Close, self.n_sma)
         """
-        if name is None:
-            params = ','.join(filter(None, map(_as_str, chain(args, kwargs.values()))))
-            func_name = _as_str(func)
-            name = (f'{func_name}({params})' if params else f'{func_name}')
-        else:
-            name = name.format(*map(_as_str, args),
-                               **dict(zip(kwargs.keys(), map(_as_str, kwargs.values()))))
+        params = ','.join(filter(None, map(_as_str, chain(args, kwargs.values()))))
+        func_name = _as_str(func)
+        name = (f'{func_name}({params})' if params else f'{func_name}')
 
         try:
             value = func(*args, **kwargs)
@@ -166,21 +160,16 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
                 f'length as `data` (data shape: {self._data.Close.shape}; indicator "{name}" '
                 f'shape: {getattr(value, "shape", "")}, returned value: {value})')
 
-        if plot and overlay is None and np.issubdtype(value.dtype, np.number):
+        auto_overlay = None
+
+        if np.issubdtype(value.dtype, np.number):
             x = value / self._data.Close
             # By default, overlay if strong majority of indicator values
             # is within 30% of Close
             with np.errstate(invalid='ignore'):
-                overlay = ((x < 1.4) & (x > .6)).mean() > .6
+                auto_overlay = ((x < 1.4) & (x > .6)).mean() > .6
 
-        if shifting > 0:
-            value = np.roll(value, shifting)
-            value[..., :shifting] = np.nan
-
-        if isinstance(value, np.ndarray):
-            value = np.around(value, decimals=decimals)
-        value = _Indicator(value, name=name, plot=plot, overlay=overlay,
-                           color=color, scatter=scatter, columnar=columnar,
+        value = _Indicator(value, name=name, plot=True, overlay=True, auto_overlay=auto_overlay,
                            # _Indicator.s Series accessor uses this:
                            index=self.data.index)
 
@@ -226,7 +215,7 @@ class Strategy(IndicatorStrategy, metaclass=ABCMeta):
 
     _FULL_EQUITY = __FULL_EQUITY(1 - sys.float_info.epsilon)
 
-    #precondition: lambda: a>b
+    # precondition: lambda: a>b
     def buy(self, *,
             size: float = _FULL_EQUITY,
             limit: Optional[float] = None,
