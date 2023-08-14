@@ -21,6 +21,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 import numpy as np
 import pandas as pd
 import talib
+import indicator
 from numpy.random import default_rng
 
 try:
@@ -50,10 +51,31 @@ class IndicatorAbs:
 
 
 class IndicatorBasic(IndicatorAbs):
+    def ATR(self, period=14) -> _Indicator:
+        return self.I(talib.ATR, self.data.High, self.data.Low, self.data.Close, timeperiod=period).overlay(False)
+    def NATR(self, period=14) -> _Indicator:
+        return self.I(talib.NATR, self.data.High, self.data.Low, self.data.Close, timeperiod=period).overlay(False)
+
     def SMA(self, *args, period=30) -> _Indicator:
         return self.I(talib.MA, *args, timeperiod=period)
 
+    def EMA(self, *args, period=30) -> _Indicator:
+        return self.I(talib.EMA, *args, timeperiod=period)
+
+    def BANDS(self, *args, period=30, dev=2, matype=0) -> _Indicator:
+        return self.I(talib.BBANDS, *args, timeperiod=period, nbdevup=dev, nbdevdn=dev, matype=matype)
+
     def MACD(self, *args, fastperiod=12, slowperiod=26, signalperiod=9) -> _Indicator:
+        '''
+        :param args:
+        :param fastperiod:
+        :param slowperiod:
+        :param signalperiod:
+        :return:
+            dif
+            dea
+            hist
+        '''
         return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod,
                       signalperiod=signalperiod).overlay(None).columnar(3)
 
@@ -223,7 +245,8 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
             sl: Optional[float] = None,
             tp: Optional[float] = None,
             tag: Optional[str] = None,
-            precondition: Optional[callable] = None
+            precondition: Optional[callable] = None,
+            eff_bars=0
             ):
         """
         Place a new long order. For explanation of parameters, see `Order` and its properties.
@@ -234,7 +257,8 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
         """
         assert 0 < size < 1 or round(size) == size, \
             "size must be a positive fraction of equity, or a positive whole number of units"
-        return self._broker.new_order(size, limit, stop, sl, tp, tag, precondition=precondition)
+        return self._broker.new_order(size, limit, stop, sl, tp, tag, precondition=precondition,
+                                      index=self.data.index[-1], eff_bars=eff_bars)
 
     def sell(self, *,
              size: float = _FULL_EQUITY,
@@ -243,7 +267,8 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
              sl: Optional[float] = None,
              tp: Optional[float] = None,
              tag: Optional[str] = None,
-             precondition: Optional[callable] = None):
+             precondition: Optional[callable] = None,
+             eff_bars=0):
         """
         Place a new short order. For explanation of parameters, see `Order` and its properties.
 
@@ -255,7 +280,8 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
         """
         assert 0 < size < 1 or round(size) == size, \
             "size must be a positive fraction of equity, or a positive whole number of units"
-        return self._broker.new_order(-size, limit, stop, sl, tp, tag, precondition=precondition)
+        return self._broker.new_order(-size, limit, stop, sl, tp, tag, precondition=precondition,
+                                      index=self.data.index[-1], eff_bars=eff_bars)
 
     @property
     def equity(self) -> float:
@@ -446,7 +472,9 @@ class Order:
                  tp_price: Optional[float] = None,
                  parent_trade: Optional['Trade'] = None,
                  tag: object = None,
-                 precondition: Optional[callable] = None):
+                 precondition: Optional[callable] = None,
+                 index=None,
+                 eff_bars=0):
         self.__broker = broker
         assert size != 0
         self.__size = size
@@ -457,6 +485,8 @@ class Order:
         self.__parent_trade = parent_trade
         self.__tag = tag
         self.__precondition = precondition
+        self.__index = index
+        self.__eff_bars = eff_bars
 
     def _replace(self, **kwargs):
         for k, v in kwargs.items():
@@ -474,6 +504,8 @@ class Order:
                                                  ('contingent', self.is_contingent),
                                                  ('tag', self.__tag),
                                                  ('precondition', str(self.__precondition)),
+                                                 ('index', str(self.__index)),
+                                                 ('eff_bars', str(self.__eff_bars)),
                                              ) if value is not None))
 
     def precondition(self) -> bool:
@@ -559,6 +591,14 @@ class Order:
         """
         return self.__tag
 
+    @property
+    def index(self):
+        return self.__index
+
+    @property
+    def eff_bars(self):
+        return self.__eff_bars
+
     __pdoc__['Order.parent_trade'] = False
 
     # Extra properties
@@ -607,7 +647,8 @@ class Trade:
 
     def __repr__(self):
         return f'<Trade size={self.__size} time={self.__entry_bar}-{self.__exit_bar or ""} ' \
-               f'price={self.__entry_price}-{self.__exit_price or ""} pl={self.pl:.0f}' \
+               f'price={self.__entry_price}-{self.__exit_price or ""} pl={self.pl:.0f} ' \
+               f'tp={self.tp} sl={self.sl} ' \
                f'{" tag=" + str(self.__tag) if self.__tag is not None else ""}>'
 
     def _replace(self, **kwargs):
@@ -766,13 +807,14 @@ class Trade:
 
 class _Broker:
     def __init__(self, *, data, cash, commission, margin,
-                 trade_on_close, hedging, exclusive_orders, index):
+                 trade_on_close, hedging, exclusive_orders, index, data_name):
         assert 0 < cash, f"cash should be >0, is {cash}"
         assert -.1 <= commission < .1, \
             ("commission should be between -10% "
              f"(e.g. market-maker's rebates) and 10% (fees), is {commission}")
         assert 0 < margin <= 1, f"margin should be between 0 and 1, is {margin}"
         self._data: _Data = data
+        self._data_name: str = data_name
         self._cash = cash
         self._commission = commission
         self._leverage = 1 / margin
@@ -799,7 +841,9 @@ class _Broker:
                   tag: object = None,
                   *,
                   trade: Optional[Trade] = None,
-                  precondition: Optional[callable] = None):
+                  precondition: Optional[callable] = None,
+                  index=None,
+                  eff_bars=0):
         """
         Argument size indicates whether the order is long or short
         """
@@ -823,7 +867,7 @@ class _Broker:
                     "Short orders require: "
                     f"TP ({tp}) < LIMIT ({limit or stop or adjusted_price}) < SL ({sl})")
 
-        order = Order(self, size, limit, stop, sl, tp, trade, tag, precondition)
+        order = Order(self, size, limit, stop, sl, tp, trade, tag, precondition, index, eff_bars)
         # Put the new order in the order queue,
         # inserting SL/TP/trade-closing orders in-front
         if trade:
@@ -899,6 +943,14 @@ class _Broker:
             if not order.precondition():
                 self.orders.remove(order)
                 continue
+
+            if order.eff_bars > 0:
+                # 倒数第几位的索引
+                reverse_position = len(self._data.index) - self._data.index.get_loc(order.index) - 1
+                # 删除过期订单
+                if order.eff_bars < reverse_position:
+                    self.orders.remove(order)
+                    continue
 
             # Check if stop condition was hit
             stop_price = order.stop
@@ -1025,7 +1077,7 @@ class _Broker:
                     elif (low <= (order.sl or -np.inf) <= high or
                           low <= (order.tp or -np.inf) <= high):
                         warnings.warn(
-                            f"({data.index[-1]}) A contingent SL/TP order would execute in the "
+                            f"({data.index[-1]}, {self._data_name}) A contingent SL/TP order would execute in the "
                             "same bar its parent stop/limit order was turned into a trade. "
                             "Since we can't assert the precise intra-candle "
                             "price movement, the affected SL/TP order will instead be executed on "
@@ -1106,7 +1158,8 @@ class Backtest:
                  margin: float = 1.,
                  trade_on_close=False,
                  hedging=False,
-                 exclusive_orders=False
+                 exclusive_orders=False,
+                 data_name=None
                  ):
         """
         Initialize a backtest. Requires data and a strategy to test.
@@ -1202,10 +1255,11 @@ class Backtest:
                           stacklevel=2)
 
         self._data: pd.DataFrame = data
+        self._data_name = data_name
         self._broker = partial(
             _Broker, cash=cash, commission=commission, margin=margin,
             trade_on_close=trade_on_close, hedging=hedging,
-            exclusive_orders=exclusive_orders, index=data.index,
+            exclusive_orders=exclusive_orders, index=data.index, data_name=self._data_name
         )
         self._strategy = strategy
         self._results: Optional[pd.Series] = None

@@ -28,7 +28,6 @@ from .backtesting import Strategy
 
 __pdoc__ = {}
 
-
 OHLCV_AGG = OrderedDict((
     ('Open', 'first'),
     ('High', 'max'),
@@ -68,7 +67,8 @@ _EQUITY_AGG = {
     'DrawdownDuration': 'max',
 }
 
-def shift(arr, num: int=1, fill_value=np.nan):
+
+def shift(arr, num: int = 1, fill_value=np.nan):
     if num == 0:
         res = arr
     elif num > 0:
@@ -78,7 +78,11 @@ def shift(arr, num: int=1, fill_value=np.nan):
 
     return type(arr)(res, **vars(arr))
 
+
 def pine_barssince(condition: Sequence[bool], start=-1) -> int:
+    '''
+    条件连续成立的bars数
+    '''
     count = 0
     for i in range(start, -len(condition) - 1, -1):
         if not condition[i]:
@@ -86,20 +90,50 @@ def pine_barssince(condition: Sequence[bool], start=-1) -> int:
         count += 1
     return count
 
-def pine_rise_range(arr:numpy.array) -> float:
+
+def pine_rise_range(arr: numpy.array) -> float:
+    '''
+    连续上涨幅度
+    '''
     first_index = -1
     for i in range(-1, -len(arr) - 1, -1):
-        if not arr[i] > arr[i-1]:
+        if not arr[i] > arr[i - 1]:
             break
         first_index -= 1
     if first_index == -1:
         return 0.0
     return round((arr[-1] - arr[first_index]) / arr[first_index] * 100, 3)
 
+def cross_after_rise_range(a: numpy.array, b: numpy.array, sft: int = 1):
+    '''
+        金叉后涨幅
+    '''
+    sa = shift(a, sft)
+    sb = shift(b, sft)
+    if sa[-1] > sb[-1]:
+        # 上一次价格小于均线位置
+        pos_low = barssince(sa < sb) + 1
+        if pos_low == float('inf'):
+            return 0.0, 0.0, 0
+        b_range = (b[-1] - b[-pos_low]) / b[-pos_low] * 100
+        a_range = (a[-1] - a[-pos_low]) / a[-pos_low] * 100
+        return a_range, b_range, pos_low
+
+    return 0.0, 0.0, 0
+
+def rise_range(a, b):
+    '''
+    A价格到B价格涨跌幅
+    :param a:
+    :param b:
+    :return:
+    '''
+    return (b - a) / a * 100
+
 
 def barssince(condition: Sequence[bool], default=np.inf) -> int:
     """
-    Return the number of bars since `condition` sequence was last `True`,
+    条件上次成立离当前的bars数
     or if never, return `default`.
 
         >>> barssince(self.data.Close > self.data.Open)
@@ -122,7 +156,7 @@ def cross(series1: Sequence, series2: Sequence) -> bool:
 
 def crossover(series1: Sequence, series2: Sequence) -> bool:
     """
-    Return `True` if `series1` just crossed over (above)
+    Return `True` if `series1` 上穿 series2
     `series2`.
 
         >>> crossover(self.data.Close, self.sma)
@@ -331,7 +365,7 @@ http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases
         frame = frame.f_back
         level += 1
         if isinstance(frame.f_locals.get('self'), Strategy):  # type: ignore
-            strategy_I = frame.f_locals['self'].I             # type: ignore
+            strategy_I = frame.f_locals['self'].I  # type: ignore
             break
     else:
         def strategy_I(func, *args, **kwargs):
@@ -378,6 +412,7 @@ def random_ohlc_data(example_data: pd.DataFrame, *,
     >>> next(ohlc_generator)  # returns new random data
     ...
     """
+
     def shuffle(x):
         return x.sample(frac=frac, replace=frac > 1, random_state=random_state)
 
@@ -506,7 +541,7 @@ class TrailingStrategy(Strategy):
     def next(self):
         super().next()
         # Can't use index=-1 because self.__atr is not an Indicator type
-        index = len(self.data)-1
+        index = len(self.data) - 1
         for trade in self.trades:
             if trade.is_long:
                 trade.sl = max(trade.sl or -np.inf,
@@ -515,12 +550,17 @@ class TrailingStrategy(Strategy):
                 trade.sl = min(trade.sl or np.inf,
                                self.data.Close[index] + self.__atr[index] * self.__n_atr)
 
+
 class TakeProfitByStopLossStrategy(Strategy):
     """
     盈亏比止损
     """
+    __sl_base_radio = None
     __tp_sl_radio = 0.5
     __tp_sl_skip_trade_num = 0
+
+    def set_stop_loss(self, sl_radio: float = 0.9):
+        self.__sl_base_radio = sl_radio
 
     def set_radio(self, tp_radio: float = 0.5, skip_trade_num=0):
         """
@@ -531,17 +571,23 @@ class TakeProfitByStopLossStrategy(Strategy):
         self.__tp_sl_skip_trade_num = skip_trade_num
 
     def next_trade(self, trade, i):
-        skip_trade_i = len(self.trades)-self.__tp_sl_skip_trade_num
-        if i > skip_trade_i:
-            return
-        tp = trade.entry_price + (trade.entry_price - trade.sl) * self.__tp_sl_radio
-        log_header = f"订单量：{len(self.trades)}；"
-        log = log_header
-        if tp != trade.tp:
-            log += "\n修改订单{i}止盈价：{tp}；"
-            trade.tp = tp
-        if log != log_header:
-            self.log(log)
+        if self.__sl_base_radio is not None and trade.sl is None:
+            trade.sl = trade.entry_price * self.__sl_base_radio
+
+        if self.__tp_sl_radio is not None:
+            skip_trade_i = len(self.trades) - self.__tp_sl_skip_trade_num
+            if i > skip_trade_i:
+                return
+
+            tp = trade.entry_price + (trade.entry_price - trade.sl) * self.__tp_sl_radio
+            # tp = (1+(1- trade.sl/trade.entry_price)*self.__tp_sl_radio) * trade.entry_price
+            log_header = f"订单量：{len(self.trades)}；"
+            log = log_header
+            if trade.tp is None:
+                log += f"\n修改订单{i}止盈价：{trade.tp}~{tp}；"
+                trade.tp = tp
+            if log != log_header:
+                self.log(log)
 
 
 # Prevent pdoc3 documenting __init__ signature of Strategy subclasses
@@ -549,13 +595,12 @@ for cls in list(globals().values()):
     if isinstance(cls, type) and issubclass(cls, Strategy):
         __pdoc__[f'{cls.__name__}.__init__'] = False
 
-
 # NOTE: Don't put anything below this __all__ list
 
 __all__ = [getattr(v, '__name__', k)
-           for k, v in globals().items()                        # export
-           if ((callable(v) and v.__module__ == __name__ or     # callables from this module
-                k.isupper()) and                                # or CONSTANTS
+           for k, v in globals().items()  # export
+           if ((callable(v) and v.__module__ == __name__ or  # callables from this module
+                k.isupper()) and  # or CONSTANTS
                not getattr(v, '__name__', k).startswith('_'))]  # neither marked internal
 
 # NOTE: Don't put anything below here. See above.

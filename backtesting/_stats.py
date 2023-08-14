@@ -71,11 +71,13 @@ def compute_stats(
             'Tag': [t.tag for t in trades],
         })
         trades_df['Duration'] = trades_df['ExitTime'] - trades_df['EntryTime']
+        trades_df['DurationBar'] = trades_df['ExitBar'] - trades_df['EntryBar']
     del trades
 
     pl = trades_df['PnL']
     returns = trades_df['ReturnPct']
     durations = trades_df['Duration']
+    durationsBar = trades_df['DurationBar']
 
     def _round_timedelta(value, _period=_data_period(index)):
         if not isinstance(value, pd.Timedelta):
@@ -84,9 +86,9 @@ def compute_stats(
         return value.ceil(resolution)
 
     s = pd.Series(dtype=object)
-    s.loc['Start'] = index[0]
-    s.loc['End'] = index[-1]
-    s.loc['Duration'] = s.End - s.Start
+    s.loc['开始时间'] = index[0]
+    s.loc['结束时间'] = index[-1]
+    s.loc['Duration'] = s.结束时间 - s.开始时间
 
     if len(trades_df['EntryTime']) > 0 :
         # 将交易按年份分组，并计算每年的盈利情况
@@ -156,8 +158,10 @@ def compute_stats(
     s.loc['最差交易率[%]'] = returns.min() * 100
     mean_return = geometric_mean(returns)
     s.loc['每笔交易平均收益率[%]'] = mean_return * 100
-    s.loc['最大持仓周期'] = _round_timedelta(durations.max())
-    s.loc['平均持仓周期'] = _round_timedelta(durations.mean())
+    #s.loc['最大持仓周期'] = _round_timedelta(durations.max())
+    #s.loc['平均持仓周期'] = _round_timedelta(durations.mean())
+    s.loc['最大持仓周期'] = durationsBar.max()
+    s.loc['平均持仓周期'] = durationsBar.mean()
     s.loc['盈利因子'] = returns[returns > 0].sum() / (abs(returns[returns < 0].sum()) or np.nan)  # noqa: E501
     s.loc['期望收益率[%]'] = returns.mean() * 100
     s.loc['SQN'] = np.sqrt(n_trades) * pl.mean() / (pl.std() or np.nan)
