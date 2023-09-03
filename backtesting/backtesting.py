@@ -79,6 +79,13 @@ class IndicatorBasic(IndicatorAbs):
         return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod,
                       signalperiod=signalperiod).overlay(None).columnar(3)
 
+    def FMA(self, *args, period=30) -> _Indicator:
+        def fibo(price: pd.Series):
+            return price*1.236, price*1.382, price*1.618, price, price*(1-0.236), price*0.382, price*0.618
+
+        ma = talib.MA(*args, timeperiod=period)
+        return self.I(fibo, ma)
+
 
 class Strategy(IndicatorBasic, metaclass=ABCMeta):
     """
