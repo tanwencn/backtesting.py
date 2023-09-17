@@ -21,7 +21,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 import numpy as np
 import pandas as pd
 import talib
-import indicator
+from ._indicator import _Indicator
 from numpy.random import default_rng
 
 try:
@@ -34,7 +34,7 @@ except ImportError:
 
 from ._plotting import plot  # noqa: I001
 from ._stats import compute_stats
-from ._util import _as_str, _Indicator, _Data, try_
+from ._util import _as_str, _Data, try_
 
 __pdoc__ = {
     'Strategy.__init__': False,
@@ -44,50 +44,7 @@ __pdoc__ = {
 }
 
 
-class IndicatorAbs:
-    @abstractmethod
-    def I(self, func: Callable, *args, **kwargs) -> _Indicator:
-        pass
-
-
-class IndicatorBasic(IndicatorAbs):
-    def ATR(self, period=14) -> _Indicator:
-        return self.I(talib.ATR, self.data.High, self.data.Low, self.data.Close, timeperiod=period).overlay(False)
-    def NATR(self, period=14) -> _Indicator:
-        return self.I(talib.NATR, self.data.High, self.data.Low, self.data.Close, timeperiod=period).overlay(False)
-
-    def SMA(self, *args, period=30) -> _Indicator:
-        return self.I(talib.MA, *args, timeperiod=period)
-
-    def EMA(self, *args, period=30) -> _Indicator:
-        return self.I(talib.EMA, *args, timeperiod=period)
-
-    def BANDS(self, *args, period=30, dev=2, matype=0) -> _Indicator:
-        return self.I(talib.BBANDS, *args, timeperiod=period, nbdevup=dev, nbdevdn=dev, matype=matype)
-
-    def MACD(self, *args, fastperiod=12, slowperiod=26, signalperiod=9) -> _Indicator:
-        '''
-        :param args:
-        :param fastperiod:
-        :param slowperiod:
-        :param signalperiod:
-        :return:
-            dif
-            dea
-            hist
-        '''
-        return self.I(talib.MACD, *args, fastperiod=fastperiod, slowperiod=slowperiod,
-                      signalperiod=signalperiod).overlay(None).columnar(3)
-
-    def FMA(self, *args, period=30) -> _Indicator:
-        def fibo(price: pd.Series):
-            return price*1.236, price*1.382, price*1.618, price, price*(1-0.236), price*0.382, price*0.618
-
-        ma = talib.MA(*args, timeperiod=period)
-        return self.I(fibo, ma)
-
-
-class Strategy(IndicatorBasic, metaclass=ABCMeta):
+class Strategy(metaclass=ABCMeta):
     """
     A trading strategy base class. Extend this class and
     override methods
@@ -126,7 +83,7 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
             setattr(self, k, v)
         return params
 
-    def I(self, func: Callable, *args, **kwargs) -> _Indicator:
+    def I(self, func: Callable, *args, ind_class_name = _Indicator,  **kwargs) -> _Indicator:
         """
         Declare an indicator. An indicator is just an array of values,
         but one that is revealed gradually in
@@ -163,6 +120,7 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
             def init():
                 self.sma = self.I(ta.SMA, self.data.Close, self.n_sma)
         """
+
         params = ','.join(filter(None, map(_as_str, chain(args, kwargs.values()))))
         func_name = _as_str(func)
         name = (f'{func_name}({params})' if params else f'{func_name}')
@@ -198,7 +156,7 @@ class Strategy(IndicatorBasic, metaclass=ABCMeta):
             with np.errstate(invalid='ignore'):
                 auto_overlay = ((x < 1.4) & (x > .6)).mean() > .6
 
-        value = _Indicator(value, name=name, plot=True, overlay=True, auto_overlay=auto_overlay,
+        value = ind_class_name(value, name=name, plot=True, overlay=True, auto_overlay=auto_overlay,
                            # _Indicator.s Series accessor uses this:
                            index=self.data.index)
 
