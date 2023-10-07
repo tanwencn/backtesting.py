@@ -12,7 +12,10 @@ import pandas as pd
 from bokeh.colors import RGB
 from bokeh.colors.named import (
     lime as BULL_COLOR,
-    tomato as BEAR_COLOR
+    tomato as BEAR_COLOR,
+    yellow as TOP_COLOR,
+    purple as BOTTOM_COLOR,
+    gray as BID_COLOR
 )
 from bokeh.models import (  # type: ignore
     CrosshairTool,
@@ -173,7 +176,7 @@ def plot(*, results: pd.Series,
          smooth_equity=False, relative_equity=True,
          superimpose=True, resample=True,
          reverse_indicators=True,
-         show_legend=True, open_browser=True):
+         show_legend=True, open_browser=True, bar_colors=[]):
     """
     Like much of GUI code everywhere, this is a mess.
     """
@@ -233,7 +236,7 @@ def plot(*, results: pd.Series,
     figs_above_ohlc, figs_below_ohlc = [], []
     df["PctChange"] = df["Close"].pct_change()
     source = ColumnDataSource(df)
-    source.add((df.Close >= df.Open).values.astype(np.uint8).astype(str), 'inc')
+    source.add(bar_colors, 'inc')
 
     trade_source = ColumnDataSource(dict(
         index=trades['ExitBar'],
@@ -243,7 +246,7 @@ def plot(*, results: pd.Series,
         returns_positive=(trades['ReturnPct'] > 0).astype(int).astype(str),
     ))
 
-    inc_cmap = factor_cmap('inc', COLORS, ['0', '1'])
+    inc_cmap = factor_cmap('inc', [BEAR_COLOR, BULL_COLOR, BOTTOM_COLOR, TOP_COLOR, BID_COLOR], ['0', '1', '2', '3', '4'])
     cmap = factor_cmap('returns_positive', COLORS, ['0', '1'])
     colors_darker = [lightness(BEAR_COLOR, .35),
                      lightness(BULL_COLOR, .35)]

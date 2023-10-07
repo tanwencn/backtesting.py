@@ -56,9 +56,16 @@ class Strategy(metaclass=ABCMeta):
     def __init__(self, broker, data, params):
         self._logs = []
         self._indicators = []
+        self._bar_colors = (data.df.Close >= data.df.Open).values.astype(np.uint8).astype(str)
         self._broker: _Broker = broker
         self._data: _Data = data
         self._params = self._check_params(params)
+
+    def bar_color(self, value):
+        self._bar_colors[len(self.data)-1] = str(value)
+
+    def color_redrawing(self):
+        pass
 
     def log(self, content: str):
         self._logs.append(pd.Series({'index': self.data.index[-1], 'action': content}))
@@ -1317,6 +1324,7 @@ class Backtest:
                     strategy.next_trade(trade, i + 1)
 
                 # Next tick, a moment before bar close
+                strategy.color_redrawing()
                 strategy.next()
             else:
                 if not signal_marker:
@@ -1777,7 +1785,8 @@ class Backtest:
             resample=resample,
             reverse_indicators=reverse_indicators,
             show_legend=show_legend,
-            open_browser=open_browser)
+            open_browser=open_browser,
+            bar_colors=results._strategy._bar_colors)
 
         if is_exit:
             exit()
