@@ -104,6 +104,17 @@ def pine_rise_range(arr: numpy.array) -> float:
         return 0.0
     return round((arr[-1] - arr[first_index]) / arr[first_index] * 100, 3)
 
+def prev_crossover(a: numpy.array, b: numpy.array, sft:int=1):
+    suc = 0
+    for i in range(-1, -len(a) - 2, -1):
+        sa = shift(a, abs(i+1))
+        sb = shift(b, abs(i+1))
+        if crossover(sa, sb):
+            suc+=1
+        if suc==sft:
+            return i
+    return 0
+
 def cross_after_rise_range(a: numpy.array, b: numpy.array, sft: int = 1):
     '''
         金叉后涨幅
