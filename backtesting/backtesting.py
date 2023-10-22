@@ -779,7 +779,7 @@ class Trade:
 
 class _Broker:
     def __init__(self, *, data, cash, commission, margin,
-                 trade_on_close, hedging, exclusive_orders, index, data_name):
+                 trade_on_close, hedging, exclusive_orders, index, data_name, rsik_percent_size):
         assert 0 < cash, f"cash should be >0, is {cash}"
         assert -.1 <= commission < .1, \
             ("commission should be between -10% "
@@ -793,6 +793,7 @@ class _Broker:
         self._trade_on_close = trade_on_close
         self._hedging = hedging
         self._exclusive_orders = exclusive_orders
+        self._rsik_percent_size = rsik_percent_size
 
         self._equity = np.tile(np.nan, len(index))
         self._equity_real = np.tile(np.nan, len(index))
@@ -994,7 +995,10 @@ class _Broker:
             # precompute true size in units, accounting for margin and spread/commissions
             size = order.size
             if -1 < size < 1:
-                size = copysign(int((self.margin_available * self._leverage * abs(size))
+                if self._cash and self._rsik_percent_size and order.sl:
+                    size = int(self._cash / (adjusted_price - order.sl) * self._rsik_percent_size)
+                else:
+                    size = copysign(int((self.margin_available * self._leverage * abs(size))
                                     // adjusted_price), size)
                 # Not enough cash/margin even for a single unit
                 if not size:
@@ -1131,7 +1135,8 @@ class Backtest:
                  trade_on_close=False,
                  hedging=False,
                  exclusive_orders=False,
-                 data_name=None
+                 data_name=None,
+                 rsik_percent_size=None,
                  ):
         """
         Initialize a backtest. Requires data and a strategy to test.
@@ -1230,7 +1235,7 @@ class Backtest:
         self._data_name = data_name
         self._broker = partial(
             _Broker, cash=cash, commission=commission, margin=margin,
-            trade_on_close=trade_on_close, hedging=hedging,
+            trade_on_close=trade_on_close, hedging=hedging, rsik_percent_size=rsik_percent_size,
             exclusive_orders=exclusive_orders, index=data.index, data_name=self._data_name
         )
         self._strategy = strategy
