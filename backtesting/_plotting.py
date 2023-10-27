@@ -567,6 +567,25 @@ return this.labels[index] || "";
             if not value._opts.get('plot') or _too_many_dims(value):
                 continue
 
+            if('heikinashi' in str(type(value)).lower()):
+                heikinashi = pd.DataFrame({
+                    'Open': value[0],
+                    'High': value[1],
+                    'Low': value[2],
+                    'Close': value[3]
+                })
+
+                # 设置索引
+                heikinashi.index = range(len(heikinashi))
+                heikinashi['inc'] = (heikinashi.Close >= heikinashi.Open).astype(int).astype(str)
+                heikinashi.index.name = None
+                heikinashi_source = ColumnDataSource(heikinashi)
+                if value.plot_hide_shadow() != True:
+                    fig_ohlc.segment('index', 'High', 'index', 'Low', source=heikinashi_source, color="black")
+                r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=heikinashi_source,
+                                  line_color="black", fill_color=inc_cmap)
+                continue
+
             is_overlay = value._opts.get('overlay', None)
             is_scatter = value._opts.get('scatter', None)
             show_columnar = int(value._opts.get('columnar', 0))
