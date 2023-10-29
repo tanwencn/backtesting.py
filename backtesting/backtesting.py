@@ -90,6 +90,40 @@ class Strategy(metaclass=ABCMeta):
             setattr(self, k, v)
         return params
 
+    def IV(self, value, name, ind_class_name = _Indicator) -> _Indicator:
+        if isinstance(value, pd.DataFrame):
+            value = value.values.T
+
+        if value is not None:
+            value = try_(lambda: np.asarray(value, order='C'), None)
+        is_arraylike = bool(value is not None and value.shape)
+
+        # Optionally flip the array if the user returned e.g. `df.values`
+        if is_arraylike and np.argmax(value.shape) == 0:
+            value = value.T
+
+        if not is_arraylike or not 1 <= value.ndim <= 2 or value.shape[-1] != len(self._data.Close):
+            raise ValueError(
+                'Indicators must return (optionally a tuple of) numpy.arrays of same '
+                f'length as `data` (data shape: {self._data.Close.shape}; indicator "{name}" '
+                f'shape: {getattr(value, "shape", "")}, returned value: {value})')
+
+        auto_overlay = None
+
+        if np.issubdtype(value.dtype, np.number):
+            x = value / self._data.Close
+            # By default, overlay if strong majority of indicator values
+            # is within 30% of Close
+            with np.errstate(invalid='ignore'):
+                auto_overlay = ((x < 1.4) & (x > .6)).mean() > .6
+
+        value = ind_class_name(value, name=name, plot=True, overlay=True, auto_overlay=auto_overlay,
+                           # _Indicator.s Series accessor uses this:
+                           index=self.data.index)
+
+        self._indicators.append(value)
+        return value
+
     def I(self, func: Callable, *args, ind_class_name = _Indicator,  **kwargs) -> _Indicator:
         """
         Declare an indicator. An indicator is just an array of values,
@@ -137,38 +171,7 @@ class Strategy(metaclass=ABCMeta):
         except Exception as e:
             raise RuntimeError(f'Indicator "{name}" error') from e
 
-        if isinstance(value, pd.DataFrame):
-            value = value.values.T
-
-        if value is not None:
-            value = try_(lambda: np.asarray(value, order='C'), None)
-        is_arraylike = bool(value is not None and value.shape)
-
-        # Optionally flip the array if the user returned e.g. `df.values`
-        if is_arraylike and np.argmax(value.shape) == 0:
-            value = value.T
-
-        if not is_arraylike or not 1 <= value.ndim <= 2 or value.shape[-1] != len(self._data.Close):
-            raise ValueError(
-                'Indicators must return (optionally a tuple of) numpy.arrays of same '
-                f'length as `data` (data shape: {self._data.Close.shape}; indicator "{name}" '
-                f'shape: {getattr(value, "shape", "")}, returned value: {value})')
-
-        auto_overlay = None
-
-        if np.issubdtype(value.dtype, np.number):
-            x = value / self._data.Close
-            # By default, overlay if strong majority of indicator values
-            # is within 30% of Close
-            with np.errstate(invalid='ignore'):
-                auto_overlay = ((x < 1.4) & (x > .6)).mean() > .6
-
-        value = ind_class_name(value, name=name, plot=True, overlay=True, auto_overlay=auto_overlay,
-                           # _Indicator.s Series accessor uses this:
-                           index=self.data.index)
-
-        self._indicators.append(value)
-        return value
+        return self.IV(value=value, name=name, ind_class_name=ind_class_name)
 
     @abstractmethod
     def init(self):

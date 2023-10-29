@@ -312,6 +312,8 @@ return this.labels[index] || "";
         # Max DD Dur. line
         equity = equity_data['Equity'].copy()
         equity_real = equity_data['Equity Real'].copy()
+        equity_hold_buy = equity_data['Equity Hold Buy'].copy()
+        equity_overage = equity_data['Equity Overage'].copy()
         dd_end = equity_data['DrawdownDuration'].idxmax()
         if np.isnan(dd_end):
             dd_start = dd_end = equity.index[0]
@@ -353,12 +355,16 @@ return this.labels[index] || "";
         source_key = 'balance'
         source_key_real = 'equity'
         source_key_float = 'float_profit'
+        source_key_hod = 'hold_profit'
+        source_key_overage = 'equity_overage'
         source.add(equity, source_key)
         source.add(equity_real, source_key_real)
         source.add(equity_real - equity, source_key_float)
+        source.add(equity_hold_buy/100, source_key_hod)
+        source.add(equity_overage/100, source_key_overage)
         fig = new_indicator_figure(
             y_axis_label=yaxis_label,
-            **({} if plot_drawdown else dict(height=110)))
+            **({} if plot_drawdown else dict(height=220)))
 
         # High-watermark drawdown dents
         fig.patch('index', 'equity_dd',
@@ -369,23 +375,34 @@ return this.labels[index] || "";
                   fill_color='#ffffea', line_color='#ffcb66')
 
         # Equity line
-        r = fig.line('index', source_key, source=source)
-        r2 = fig.line('index', source_key_real, source=source, line_dash="dotted")
+        r = fig.line('index', source_key, source=source, legend_label=f'策略收益. ({round(equity.iloc[-1] * (100 if relative_equity else 1), 2)})')
+        fig.line('index', source_key_real, source=source, line_dash="dotted")
+        fig.line('index', source_key_hod, source=source, line_color='#8B0000', legend_label='买入持有 ({})'.format(round(equity_hold_buy.iloc[-1], 2)))
+        fig.line('index', source_key_overage, source=source, line_color='#DAA520', legend_label='超额收益 ({})'.format(round(equity_overage.iloc[-1], 2)))
 
         if relative_equity:
+            tooltip_format_overage = f'@{source_key_overage}{{+0,0.[000]%}}'
+            tooltip_format_hod = f'@{source_key_hod}{{+0,0.[000]%}}'
             tooltip_format = f'@{source_key}{{+0,0.[000]%}}'
             tooltip_format_real = f'@{source_key_real}{{+0,0.[000]%}}'
             tooltip_format_float = f'@{source_key_float}{{+0,0.[000]%}}'
             tick_format = '0,0.[00]%'
             legend_format = '{:,.0f}%'
         else:
+            tooltip_format_overage = f'@{source_key_overage}{{+0,0.[000]%}}'
+            tooltip_format_hod = f'@{source_key_hod}{{+0,0.[000]%}}'
             tooltip_format = f'@{source_key}{{$ 0,0}}'
             tooltip_format_real = f'@{source_key_real}{{$ 0,0}}'
             tooltip_format_float = f'@{source_key_float}{{$ 0,0}}'
             tick_format = '$ 0.0 a'
             legend_format = '${:,.0f}'
-        set_tooltips(fig, [('结余', tooltip_format), ('权益', tooltip_format_real), ('浮动盈亏', tooltip_format_float)],
-                     renderers=[r])
+        set_tooltips(fig, [
+            ('结余', tooltip_format),
+            ('权益', tooltip_format_real),
+            ('浮动盈亏', tooltip_format_float),
+            ('买入持有', tooltip_format_hod),
+            ('超额收益', tooltip_format_overage),
+        ], renderers=[r])
         fig.yaxis.formatter = NumeralTickFormatter(format=tick_format)
 
         # Peaks
@@ -394,10 +411,6 @@ return this.labels[index] || "";
                     legend_label='最大结余 ({})'.format(
                         legend_format.format(equity[argmax] * (100 if relative_equity else 1))),
                     color='cyan', size=8)
-        fig.scatter(index[-1], equity.values[-1],
-                    legend_label='最终结余 ({})'.format(
-                        legend_format.format(equity.iloc[-1] * (100 if relative_equity else 1))),
-                    color='blue', size=8)
 
         if len(trades) > 0:
             win_rate = round(len(trades[trades['PnL'] > 0]) / len(trades) * 100, 2)
@@ -584,6 +597,11 @@ return this.labels[index] || "";
                     fig_ohlc.segment('index', 'High', 'index', 'Low', source=heikinashi_source, color="black")
                 r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=heikinashi_source,
                                   line_color="black", fill_color=inc_cmap)
+
+                # ohlc_tooltips.append(('OHLC', NBSP.join(('@Open{0,0.0[0000]}',
+                #                         '@High{0,0.0[0000]}',
+                #                         '@Low{0,0.0[0000]}',
+                #                         '@Close{0,0.0[0000]}'))))
                 continue
 
             is_overlay = value._opts.get('overlay', None)

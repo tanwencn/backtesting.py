@@ -42,12 +42,17 @@ def compute_stats(
         attachment: bool = True,
 ) -> pd.Series:
     assert -1 < risk_free_rate < 1
-
+    cumprod_close = ((1 + ohlc_data.Close.pct_change()).cumprod() - 1).to_numpy() *100
     index = ohlc_data.index
     dd = 1 - equity / np.maximum.accumulate(equity)
     dd_dur, dd_peaks = compute_drawdown_duration_peaks(pd.Series(dd, index=index))
 
+    # 计算超额收益
+    overage_equity = (equity_real / equity_real[0]-1) * 100-cumprod_close
+
     equity_df = pd.DataFrame({
+        'Equity Overage': overage_equity,
+        'Equity Hold Buy': cumprod_close,
         'Equity': equity,
         'Equity Real': equity_real,
         'DrawdownPct': dd,
@@ -110,9 +115,9 @@ def compute_stats(
     s.loc['最终净值[$]'] = equity[-1]
     s.loc['最高净值[$]'] = equity.max()
     s.loc['总收益率[%]'] = (equity[-1] - equity[0]) / equity[0] * 100
-    c = ohlc_data.Close.values
     #s.loc['Buy & Hold Return [%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
-    s.loc['买入并持有[%]'] = (c[-1] - c[0]) / c[0] * 100  # long-only return
+    s.loc['买入并持有[%]'] = equity_df['Equity Hold Buy'][-1]  # long-only return
+    s.loc['超额收益[%]'] = equity_df['Equity Overage'][-1]
 
     gmean_day_return: float = 0
     day_returns = np.array(np.nan)
