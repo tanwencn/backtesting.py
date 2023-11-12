@@ -590,13 +590,13 @@ return this.labels[index] || "";
 
                 # 设置索引
                 heikinashi.index = range(len(heikinashi))
-                heikinashi['inc'] = (heikinashi.Close >= heikinashi.Open).astype(int).astype(str)
+                heikinashi['inc'] = np.where(heikinashi['Close'] >= heikinashi['Open'], 3, 2).astype(str)
                 heikinashi.index.name = None
                 heikinashi_source = ColumnDataSource(heikinashi)
                 if value.plot_hide_shadow() != True:
-                    fig_ohlc.segment('index', 'High', 'index', 'Low', source=heikinashi_source, color="black")
-                r = fig_ohlc.vbar('index', BAR_WIDTH, 'Open', 'Close', source=heikinashi_source,
-                                  line_color="black", fill_color=inc_cmap)
+                    fig_ohlc.segment('index', 'High', 'index', 'Low', source=heikinashi_source, color=inc_cmap)
+                r = fig_ohlc.vbar('index', BAR_WIDTH*0.6, 'Open', 'Close', source=heikinashi_source,
+                                  line_color=inc_cmap, fill_color=inc_cmap, line_alpha=0.5)
 
                 # ohlc_tooltips.append(('OHLC', NBSP.join(('@Open{0,0.0[0000]}',
                 #                         '@High{0,0.0[0000]}',
