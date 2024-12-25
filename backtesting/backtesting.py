@@ -316,6 +316,10 @@ class Strategy(metaclass=ABCMeta):
         """List of settled trades (see `Trade`)."""
         return tuple(self._broker.closed_trades)
 
+    @property
+    def data_name(self):
+        return self._broker._data_name
+
 
 class _Orders(tuple):
     """

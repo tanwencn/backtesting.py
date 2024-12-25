@@ -377,8 +377,8 @@ return this.labels[index] || "";
         # Equity line
         r = fig.line('index', source_key, source=source, legend_label=f'策略收益. ({round(equity.iloc[-1] * (100 if relative_equity else 1), 2)})')
         fig.line('index', source_key_real, source=source, line_dash="dotted")
-        fig.line('index', source_key_hod, source=source, line_color='#8B0000', legend_label='买入持有 ({})'.format(round(equity_hold_buy.iloc[-1], 2)))
-        fig.line('index', source_key_overage, source=source, line_color='#DAA520', legend_label='超额收益 ({})'.format(round(equity_overage.iloc[-1], 2)))
+        # fig.line('index', source_key_hod, source=source, line_color='#8B0000', legend_label='买入持有 ({})'.format(round(equity_hold_buy.iloc[-1], 2)))
+        # fig.line('index', source_key_overage, source=source, line_color='#DAA520', legend_label='超额收益 ({})'.format(round(equity_overage.iloc[-1], 2)))
 
         if relative_equity:
             tooltip_format_overage = f'@{source_key_overage}{{+0,0.[000]%}}'
