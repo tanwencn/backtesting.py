@@ -623,6 +623,11 @@ class Trade:
         self.__sl_order: Optional[Order] = None
         self.__tp_order: Optional[Order] = None
         self.__tag = tag
+        self.__logs = {}
+
+    def log(self, key: str, value: str):
+        """添加日志信息"""
+        self.__logs[key] = value
 
     def __repr__(self):
         return f'<Trade size={self.__size} time={self.__entry_bar}-{self.__exit_bar or ""} ' \
@@ -688,6 +693,11 @@ class Trade:
         See also `Order.tag`.
         """
         return self.__tag
+
+    @property
+    def logs(self):
+        """Trade size (volume; negative for short trades)."""
+        return self.__logs
 
     @property
     def _sl_order(self):

@@ -74,6 +74,7 @@ def compute_stats(
             'EntryTime': [t.entry_time for t in trades],
             'ExitTime': [t.exit_time for t in trades],
             'Tag': [t.tag for t in trades],
+            'Logs': [t.logs for t in trades],
         })
         trades_df['Duration'] = trades_df['ExitTime'] - trades_df['EntryTime']
         trades_df['DurationBar'] = trades_df['ExitBar'] - trades_df['EntryBar']
