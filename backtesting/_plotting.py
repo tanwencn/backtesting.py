@@ -176,7 +176,7 @@ def plot(*, results: pd.Series,
          smooth_equity=False, relative_equity=True,
          superimpose=True, resample=True,
          reverse_indicators=True,
-         show_legend=True, open_browser=True, bar_colors=[]):
+         show_legend=True, open_browser=True, bar_colors=[], symbol=None):
     """
     Like much of GUI code everywhere, this is a mess.
     """
@@ -548,6 +548,9 @@ return this.labels[index] || "";
                             source=trade_source, line_color=trades_cmap,
                             legend_label=f'交易记录 ({len(trades)})',
                             line_width=8, line_alpha=1, line_dash='dotted')
+        fig_ohlc.multi_line(xs='position_lines_xs', ys='position_lines_ys',
+                            legend_label=f'交易品种 ({symbol})',
+                            line_width=8, line_alpha=1)
 
     def _plot_indicators():
         """Strategy indicators"""

@@ -20,9 +20,9 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import pandas as pd
-import talib
-from ._indicator import _Indicator
 from numpy.random import default_rng
+
+from ._indicator import _Indicator
 
 try:
     from tqdm.auto import tqdm as _tqdm
@@ -62,7 +62,7 @@ class Strategy(metaclass=ABCMeta):
         self._params = self._check_params(params)
 
     def bar_color(self, value):
-        self._bar_colors[len(self.data)-1] = str(value)
+        self._bar_colors[len(self.data) - 1] = str(value)
 
     def color_redrawing(self):
         pass
@@ -90,7 +90,7 @@ class Strategy(metaclass=ABCMeta):
             setattr(self, k, v)
         return params
 
-    def IV(self, value, name, ind_class_name = _Indicator) -> _Indicator:
+    def IV(self, value, name, ind_class_name=_Indicator) -> _Indicator:
         if isinstance(value, pd.DataFrame):
             value = value.values.T
 
@@ -118,13 +118,13 @@ class Strategy(metaclass=ABCMeta):
                 auto_overlay = ((x < 1.4) & (x > .6)).mean() > .6
 
         value = ind_class_name(value, name=name, plot=True, overlay=True, auto_overlay=auto_overlay,
-                           # _Indicator.s Series accessor uses this:
-                           index=self.data.index)
+                               # _Indicator.s Series accessor uses this:
+                               index=self.data.index)
 
         self._indicators.append(value)
         return value
 
-    def I(self, func: Callable, *args, ind_class_name = _Indicator,  **kwargs) -> _Indicator:
+    def I(self, func: Callable, *args, ind_class_name=_Indicator, **kwargs) -> _Indicator:
         """
         Declare an indicator. An indicator is just an array of values,
         but one that is revealed gradually in
@@ -1006,7 +1006,7 @@ class _Broker:
                     size = int(self._cash / (adjusted_price - order.sl) * self._rsik_percent_size)
                 else:
                     size = copysign(int((self.margin_available * self._leverage * abs(size))
-                                    // adjusted_price), size)
+                                        // adjusted_price), size)
                 # Not enough cash/margin even for a single unit
                 if not size:
                     self.orders.remove(order)
@@ -1779,6 +1779,7 @@ class Backtest:
             results = self._results
 
         p = plot(
+            symbol=self._data_name,
             results=results,
             df=self._data,
             indicators=results._strategy._indicators,
